@@ -18,6 +18,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from .forms import (
@@ -30,6 +31,7 @@ from .forms import (
     ProductoForm,
     TipoProductoForm,
     TipoPagoForm,
+    VentaEditarForm,
     VentaForm,
     lotes_con_stock,
 )
@@ -482,7 +484,7 @@ def pago_eliminar(request, pago_id):
     )
 
 
-def ventas(request):
+def ventas(request, contexto_creacion=None):
     mes = request.GET.get("mes", "")
     tipo_pago_id = request.GET.get("tipo_pago", "")
     orden = request.GET.get("orden", "reciente")
@@ -628,6 +630,13 @@ def ventas(request):
                 - detalle.costo_total
                 - detalle.comision_karen
             )
+            detalle.form_edicion = DetalleVentaForm(
+                instance=detalle, prefix=f"detalle-{detalle.id}"
+            )
+        venta.form_edicion = VentaEditarForm(
+            instance=venta, prefix=f"venta-{venta.id}"
+        )
+        venta.form_producto_nuevo = DetalleVentaForm(prefix=f"nuevo-{venta.id}")
     resumen = {
         "costo_total": sum(
             (venta.costo_total for venta in items), Decimal("0")
@@ -643,6 +652,22 @@ def ventas(request):
         ),
     }
 
+    if contexto_creacion is None:
+        contexto_creacion = {
+            "venta_crear_form": VentaForm(
+                initial={
+                    "fecha": timezone.localtime(),
+                    "estado_entrega": "No entregado",
+                }
+            ),
+            "detalles_crear": [
+                {"indice": 0, "form": DetalleVentaForm(prefix="detalle-0")}
+            ],
+            "total_detalles": 1,
+            "formulario_venta_abierto": request.GET.get("crear") == "1",
+        }
+    contexto_creacion["lotes_disponibles"] = lotes_con_stock()
+
     return render(
         request,
         "negocio/ventas.html",
@@ -653,11 +678,31 @@ def ventas(request):
             "pago_seleccionado": tipo_pago_id,
             "orden_seleccionado": orden,
             "resumen": resumen,
+            "venta_abierta": request.GET.get("abierta", ""),
+            **contexto_creacion,
         },
     )
 
 
 def venta_crear(request):
+    if request.method != "POST":
+        return ventas(
+            request,
+            {
+                "venta_crear_form": VentaForm(
+                    initial={
+                        "fecha": timezone.localtime(),
+                        "estado_entrega": "No entregado",
+                    }
+                ),
+                "detalles_crear": [
+                    {"indice": 0, "form": DetalleVentaForm(prefix="detalle-0")}
+                ],
+                "total_detalles": 1,
+                "formulario_venta_abierto": True,
+            },
+        )
+
     if request.method == "POST":
         form = VentaForm(request.POST)
         total_detalles = _entero_acotado(
@@ -750,13 +795,112 @@ def venta_crear(request):
             messages.success(request, f"Venta #{venta.id} registrada correctamente.")
             return redirect("negocio:ventas")
 
-    return render(
+    return ventas(
         request,
-        "negocio/venta_form.html",
         {
-            "form": form,
-            "detalles": detalles,
+            "venta_crear_form": form,
+            "detalles_crear": detalles,
             "total_detalles": total_detalles,
-            "lotes_disponibles": lotes_con_stock(),
+            "formulario_venta_abierto": True,
         },
     )
+
+
+def venta_editar(request, venta_id):
+    venta = get_object_or_404(Venta, pk=venta_id)
+    if request.method == "POST":
+        form = VentaEditarForm(
+            request.POST, instance=venta, prefix=f"venta-{venta.id}"
+        )
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Venta #{venta.id} actualizada.")
+        else:
+            messages.error(request, "No se pudo actualizar la venta. Revisa los datos.")
+    return redirect(f"{reverse('negocio:ventas')}?abierta={venta.id}")
+
+
+def venta_producto_agregar(request, venta_id):
+    venta = get_object_or_404(Venta, pk=venta_id)
+    if request.method == "POST":
+        form = DetalleVentaForm(request.POST, prefix=f"nuevo-{venta.id}")
+        if form.is_valid():
+            with transaction.atomic():
+                lote = form.cleaned_data["inventario_lote"]
+                detalle = form.save(commit=False)
+                detalle.venta = venta
+                detalle.producto = lote.producto
+                detalle.save()
+                SalidaInventario.objects.create(
+                    detalle_venta=detalle,
+                    inventario_lote=lote,
+                    cantidad=detalle.cantidad,
+                )
+                persona_karen, _ = PersonaGanancia.objects.get_or_create(
+                    nombre="Karen"
+                )
+                DistribucionGanancia.objects.create(
+                    venta=venta,
+                    detalle_venta=detalle,
+                    persona=persona_karen,
+                    monto=form.cleaned_data.get("comision_karen") or 0,
+                )
+            messages.success(request, "Producto agregado a la venta.")
+        else:
+            error = next(
+                (
+                    str(mensaje)
+                    for mensajes in form.errors.values()
+                    for mensaje in mensajes
+                ),
+                "Revisa los datos del producto.",
+            )
+            messages.error(request, error)
+    return redirect(f"{reverse('negocio:ventas')}?abierta={venta.id}")
+
+
+def detalle_venta_editar(request, detalle_id):
+    detalle = get_object_or_404(
+        DetalleVenta.objects.select_related("venta"), pk=detalle_id
+    )
+    if request.method == "POST":
+        form = DetalleVentaForm(
+            request.POST,
+            instance=detalle,
+            prefix=f"detalle-{detalle.id}",
+        )
+        if form.is_valid():
+            with transaction.atomic():
+                lote = form.cleaned_data["inventario_lote"]
+                detalle = form.save(commit=False)
+                detalle.producto = lote.producto
+                detalle.save()
+                detalle.salidas.all().delete()
+                SalidaInventario.objects.create(
+                    detalle_venta=detalle,
+                    inventario_lote=lote,
+                    cantidad=detalle.cantidad,
+                )
+                persona_karen, _ = PersonaGanancia.objects.get_or_create(
+                    nombre="Karen"
+                )
+                DistribucionGanancia.objects.update_or_create(
+                    detalle_venta=detalle,
+                    persona=persona_karen,
+                    defaults={
+                        "venta": detalle.venta,
+                        "monto": form.cleaned_data.get("comision_karen") or 0,
+                    },
+                )
+            messages.success(request, "Producto actualizado.")
+        else:
+            error = next(
+                (
+                    str(mensaje)
+                    for mensajes in form.errors.values()
+                    for mensaje in mensajes
+                ),
+                "Revisa los datos del producto.",
+            )
+            messages.error(request, error)
+    return redirect(f"{reverse('negocio:ventas')}?abierta={detalle.venta_id}")

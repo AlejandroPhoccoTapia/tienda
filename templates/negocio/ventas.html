@@ -5,26 +5,81 @@
   <div>
     <p class="eyebrow">Actividad comercial</p>
     <h1>Ventas realizadas</h1>
-    <p class="subtitle">Filtra por mes y método de pago, y elige cómo ordenar las fechas.</p>
+    <p class="subtitle">Toda la información visible, sin desplazarte hacia los costados.</p>
   </div>
   <div class="heading-actions">
     <span class="count-pill">{{ ventas|length }} venta{{ ventas|length|pluralize }}</span>
-    <a class="button primary" href="{% url 'negocio:venta_crear' %}">+ Nueva venta</a>
+    <button class="button primary" type="button" data-panel-target="new-sale-panel">+ Nueva venta</button>
   </div>
 </section>
 
+<section class="inline-sale-creator" id="new-sale-panel" {% if not formulario_venta_abierto %}hidden{% endif %}>
+  <div class="inline-panel-heading">
+    <div>
+      <p class="eyebrow">Nueva venta</p>
+      <h2>Registra la venta aquí mismo</h2>
+    </div>
+    <button class="icon-close" type="button" data-close-panel="new-sale-panel" aria-label="Cerrar">×</button>
+  </div>
+  <form class="workflow-form compact-sale-form" id="sale-form" action="{% url 'negocio:venta_crear' %}" method="post" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="detalle_count" id="detail-count" value="{{ total_detalles }}">
+    <div id="detail-deletions"></div>
+    {% if venta_crear_form.non_field_errors %}<div class="form-alert">{{ venta_crear_form.non_field_errors }}</div>{% endif %}
+    <div class="compact-general-fields">
+      {% for field in venta_crear_form %}
+        <label class="{% if field.name == 'direccion_entrega' %}wide-field{% endif %}{% if field.name == 'pagado' %} checkbox-field{% endif %}">
+          {% if field.name == "pagado" %}
+            {{ field }} <span>{{ field.label }}</span>
+          {% else %}
+            <span>{{ field.label }}</span>{{ field }}
+          {% endif %}
+          {% for error in field.errors %}<em>{{ error }}</em>{% endfor %}
+        </label>
+      {% endfor %}
+    </div>
+    <div class="inline-panel-subheading">
+      <div><strong>Productos</strong><small>Selecciona el lote exacto para respetar el stock.</small></div>
+      <button class="button small ghost" id="add-sale-line" type="button">+ Agregar fila</button>
+    </div>
+    <div id="sale-lines" class="sale-lines compact-lines">
+      {% for detalle in detalles_crear %}
+        <div class="sale-line" data-detail-index="{{ detalle.indice }}">
+          {% for field in detalle.form %}
+            <label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}">
+              <span>{{ field.label }}</span>{{ field }}
+              {% if field.name == "inventario_lote" %}<small class="lot-stock-hint">Selecciona un lote para ver el límite.</small>{% endif %}
+              {% for error in field.errors %}<em>{{ error }}</em>{% endfor %}
+            </label>
+          {% endfor %}
+          <button class="remove-line" type="button" aria-label="Quitar producto">×</button>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="inline-form-actions">
+      <button class="button ghost" type="button" data-close-panel="new-sale-panel">Cancelar</button>
+      <button class="button primary" type="submit">Registrar venta</button>
+    </div>
+  </form>
+</section>
+
+<template id="sale-line-template">
+  <div class="sale-line" data-detail-index="__D__">
+    <label class="lot-select-field"><span>Producto y lote</span><select name="detalle-__D__-inventario_lote" required><option value="">Selecciona un lote con stock</option>{% for lote in lotes_disponibles %}<option value="{{ lote.id }}" data-stock="{{ lote.stock_disponible }}" data-cost="{{ lote.costo_unitario_soles|floatformat:2 }}">{{ lote.producto.nombre }} · Lote #{{ lote.id }} ({{ lote.paquete.codigo_seguimiento|default:"Sin seguimiento" }}) · Costo S/ {{ lote.costo_unitario_soles|floatformat:2 }} · Disponible: {{ lote.stock_disponible }}</option>{% endfor %}</select><small class="lot-stock-hint">Selecciona un lote para ver el límite.</small></label>
+    <label><span>Cantidad</span><input type="number" name="detalle-__D__-cantidad" min="1" step="1" required></label>
+    <label><span>Precio unitario S/</span><input type="number" name="detalle-__D__-precio_unitario_venta" min="0" step="0.01" placeholder="0.00" required></label>
+    <label><span>Comisión Karen S/</span><input type="number" name="detalle-__D__-comision_karen" min="0" step="0.01" value="0"></label>
+    <button class="remove-line" type="button" aria-label="Quitar producto">×</button>
+  </div>
+</template>
+
 <form class="filter-bar sales-filters" method="get">
-  <label>
-    <span>Mes</span>
-    <input type="month" name="mes" value="{{ mes_seleccionado }}">
-  </label>
+  <label><span>Mes</span><input type="month" name="mes" value="{{ mes_seleccionado }}"></label>
   <label>
     <span>Método de pago</span>
     <select name="tipo_pago">
       <option value="">Todos los métodos</option>
-      {% for tipo in tipos_pago %}
-        <option value="{{ tipo.id }}" {% if pago_seleccionado == tipo.id|stringformat:"s" %}selected{% endif %}>{{ tipo.nombre }}</option>
-      {% endfor %}
+      {% for tipo in tipos_pago %}<option value="{{ tipo.id }}" {% if pago_seleccionado == tipo.id|stringformat:"s" %}selected{% endif %}>{{ tipo.nombre }}</option>{% endfor %}
     </select>
   </label>
   <label>
@@ -35,117 +90,102 @@
     </select>
   </label>
   <button class="button primary" type="submit">Aplicar filtros</button>
-  {% if mes_seleccionado or pago_seleccionado or orden_seleccionado == "antigua" %}
-    <a class="button ghost" href="{% url 'negocio:ventas' %}">Limpiar</a>
-  {% endif %}
+  {% if mes_seleccionado or pago_seleccionado or orden_seleccionado == "antigua" %}<a class="button ghost" href="{% url 'negocio:ventas' %}">Limpiar</a>{% endif %}
 </form>
 
 <section class="sales-summary" aria-label="Totales de las ventas filtradas">
-  <article>
-    <span>Costo total</span>
-    <strong>S/ {{ resumen.costo_total|floatformat:2 }}</strong>
-  </article>
-  <article>
-    <span>Precio de venta total</span>
-    <strong>S/ {{ resumen.precio_venta_total|floatformat:2 }}</strong>
-  </article>
-  <article>
-    <span>Comisión de Karen</span>
-    <strong>S/ {{ resumen.comision_karen_total|floatformat:2 }}</strong>
-  </article>
-  <article class="profit-summary {% if resumen.mi_ganancia_total < 0 %}negative{% endif %}">
-    <span>Mi ganancia total</span>
-    <strong>S/ {{ resumen.mi_ganancia_total|floatformat:2 }}</strong>
-  </article>
+  <article><span>Costo total</span><strong>S/ {{ resumen.costo_total|floatformat:2 }}</strong></article>
+  <article><span>Precio de venta total</span><strong>S/ {{ resumen.precio_venta_total|floatformat:2 }}</strong></article>
+  <article><span>Comisión de Karen</span><strong>S/ {{ resumen.comision_karen_total|floatformat:2 }}</strong></article>
+  <article class="profit-summary {% if resumen.mi_ganancia_total < 0 %}negative{% endif %}"><span>Mi ganancia total</span><strong>S/ {{ resumen.mi_ganancia_total|floatformat:2 }}</strong></article>
 </section>
 
 {% if ventas %}
-  <section class="table-card">
-    <div class="table-wrap">
-      <table class="sales-table">
-        <thead>
-          <tr>
-            <th># Venta</th>
-            <th>Fecha</th>
-            <th>Cliente</th>
-            <th>Método de pago</th>
-            <th>Estado</th>
-            <th>Unidades</th>
-            <th>Costo</th>
-            <th>Precio de venta</th>
-            <th>Karen</th>
-            <th>Mi ganancia</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for venta in ventas %}
-            <tr class="sale-summary-row" tabindex="0" role="button" aria-expanded="false" aria-controls="sale-detail-{{ venta.id }}" data-sale-toggle="{{ venta.id }}">
-              <td><span class="sale-chevron">›</span><strong>#{{ venta.id }}</strong></td>
-              <td>{{ venta.fecha|date:"d M Y" }}<small>{{ venta.fecha|date:"H:i" }}</small></td>
-              <td>
-                <div class="client-line">
-                  <strong>{{ venta.cliente.nombre|default:"Cliente no registrado" }}</strong>
-                  {% if venta.cliente.telefono %}
-                    <button class="copy-phone" type="button" data-phone="{{ venta.cliente.telefono }}" title="Copiar teléfono de {{ venta.cliente.nombre }}" aria-label="Copiar teléfono de {{ venta.cliente.nombre }}">⧉</button>
-                  {% endif %}
-                </div>
-                <small>{{ venta.direccion_entrega|default:"Sin dirección" }}</small>
-              </td>
-              <td>
-                <strong>{{ venta.tipo_pago.nombre }}</strong>
-                <small><span class="payment-status {% if venta.pagado %}paid{% else %}unpaid{% endif %}">{% if venta.pagado %}Pagado{% else %}Pendiente de pago{% endif %}</span></small>
-              </td>
-              <td>
-                <span class="status {% if venta.estado_entrega|lower == 'entregado' %}success{% else %}pending{% endif %}">
-                  {% if venta.estado_entrega|lower == "entregado" %}Entregado{% else %}No entregado{% endif %}
-                </span>
-              </td>
-              <td><strong>{{ venta.unidades }}</strong></td>
-              <td><strong>S/ {{ venta.costo_total|floatformat:2 }}</strong><small>Costo de productos</small></td>
-              <td><strong>S/ {{ venta.total|floatformat:2 }}</strong><small>Desc. S/ {{ venta.descuento|floatformat:2 }}</small></td>
-              <td><strong>S/ {{ venta.monto_karen|floatformat:2 }}</strong><small>Entrega</small></td>
-              <td class="profit-cell {% if venta.mi_ganancia < 0 %}negative{% endif %}"><strong>S/ {{ venta.mi_ganancia|floatformat:2 }}</strong><small>Venta − costo − Karen</small></td>
-            </tr>
-            <tr class="sale-detail-row" id="sale-detail-{{ venta.id }}" hidden>
-              <td colspan="10">
-                <div class="sale-products">
-                  <div class="sale-products-heading">
-                    <strong>Producto</strong>
-                    <strong>Precio de venta</strong>
-                    <strong>Costo</strong>
-                    <strong>Comisión Karen</strong>
-                    <strong>Mi ganancia</strong>
-                  </div>
-                  {% for detalle in venta.detalles_calculados %}
-                    <div class="sale-product-row">
-                      <div>
-                        <strong>{{ detalle.producto.nombre }}</strong>
-                        <small>{{ detalle.cantidad }} × S/ {{ detalle.precio_unitario_venta|floatformat:2 }}</small>
-                      </div>
-                      <div>
-                        <strong>S/ {{ detalle.precio_venta_total|floatformat:2 }}</strong>
-                        {% if detalle.descuento_asignado %}<small>Desc. asignado S/ {{ detalle.descuento_asignado|floatformat:2 }}</small>{% endif %}
-                      </div>
-                      <div><strong>S/ {{ detalle.costo_total|floatformat:2 }}</strong><small>Costo del lote</small></div>
-                      <div><strong>S/ {{ detalle.comision_karen|floatformat:2 }}</strong><small>Por este producto</small></div>
-                      <div class="product-profit {% if detalle.mi_ganancia < 0 %}negative{% endif %}"><strong>S/ {{ detalle.mi_ganancia|floatformat:2 }}</strong><small>Venta − desc. − costo − Karen</small></div>
-                    </div>
-                  {% empty %}
-                    <p class="table-empty">Esta venta no tiene productos registrados.</p>
-                  {% endfor %}
-                </div>
-              </td>
-            </tr>
+  <section class="sales-list">
+    {% for venta in ventas %}
+      <article class="sale-card {% if venta_abierta == venta.id|stringformat:'s' %}expanded{% endif %}" data-sale-card="{{ venta.id }}">
+        <div class="sale-card-summary" tabindex="0" role="button" aria-expanded="{% if venta_abierta == venta.id|stringformat:'s' %}true{% else %}false{% endif %}" aria-controls="sale-detail-{{ venta.id }}" data-sale-toggle="{{ venta.id }}">
+          <div class="sale-identity">
+            <button class="sale-chevron" type="button" tabindex="-1" aria-label="Ver productos">›</button>
+            <div><strong>#{{ venta.id }}</strong><small>{{ venta.fecha|date:"d M Y" }} · {{ venta.fecha|date:"H:i" }}</small></div>
+          </div>
+          <div class="sale-client">
+            <div class="client-line">
+              <strong>{{ venta.cliente.nombre|default:"Cliente no registrado" }}</strong>
+              {% if venta.cliente.telefono %}<button class="copy-phone" type="button" data-phone="{{ venta.cliente.telefono }}" title="Copiar teléfono" aria-label="Copiar teléfono de {{ venta.cliente.nombre }}">⧉</button>{% endif %}
+            </div>
+            <small>{{ venta.direccion_entrega|default:"Sin dirección" }}</small>
+          </div>
+          <div class="sale-payment">
+            <strong>{{ venta.tipo_pago.nombre }}</strong>
+            <span class="payment-status {% if venta.pagado %}paid{% else %}unpaid{% endif %}">{% if venta.pagado %}Pagado{% else %}Pendiente{% endif %}</span>
+          </div>
+          <div class="sale-status">
+            <span class="status {% if venta.estado_entrega|lower == 'entregado' %}success{% else %}pending{% endif %}">{% if venta.estado_entrega|lower == "entregado" %}Entregado{% else %}No entregado{% endif %}</span>
+            <small>{{ venta.unidades }} unidad{{ venta.unidades|pluralize:"es" }}</small>
+          </div>
+          <div class="sale-actions">
+            <button class="button tiny ghost" type="button" data-panel-target="sale-edit-{{ venta.id }}">Editar</button>
+          </div>
+        </div>
+
+        <div class="sale-financials">
+          <div><span>Costo</span><strong>S/ {{ venta.costo_total|floatformat:2 }}</strong></div>
+          <div><span>Precio de venta</span><strong>S/ {{ venta.total|floatformat:2 }}</strong><small>Desc. S/ {{ venta.descuento|floatformat:2 }}</small></div>
+          <div><span>Karen</span><strong>S/ {{ venta.monto_karen|floatformat:2 }}</strong></div>
+          <div class="profit-cell {% if venta.mi_ganancia < 0 %}negative{% endif %}"><span>Mi ganancia</span><strong>S/ {{ venta.mi_ganancia|floatformat:2 }}</strong></div>
+        </div>
+
+        <form class="inline-edit-panel compact-edit-grid" id="sale-edit-{{ venta.id }}" action="{% url 'negocio:venta_editar' venta.id %}" method="post" hidden>
+          {% csrf_token %}
+          {% for field in venta.form_edicion %}
+            <label class="{% if field.name == 'pagado' %}checkbox-field{% endif %}">
+              {% if field.name == "pagado" %}{{ field }} <span>{{ field.label }}</span>{% else %}<span>{{ field.label }}</span>{{ field }}{% endif %}
+            </label>
           {% endfor %}
-        </tbody>
-      </table>
-    </div>
+          <div class="inline-edit-actions"><button class="button tiny ghost" type="button" data-close-panel="sale-edit-{{ venta.id }}">Cancelar</button><button class="button tiny primary" type="submit">Guardar venta</button></div>
+        </form>
+
+        <div class="sale-detail" id="sale-detail-{{ venta.id }}" {% if venta_abierta != venta.id|stringformat:'s' %}hidden{% endif %}>
+          <div class="sale-products-toolbar">
+            <div><strong>Productos de la venta</strong><small>Edita únicamente lote, cantidad, precio o comisión.</small></div>
+            <button class="button tiny ghost" type="button" data-panel-target="add-product-{{ venta.id }}">+ Producto</button>
+          </div>
+
+          <form class="inline-edit-panel product-inline-form" id="add-product-{{ venta.id }}" action="{% url 'negocio:venta_producto_agregar' venta.id %}" method="post" hidden>
+            {% csrf_token %}
+            {% for field in venta.form_producto_nuevo %}<label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.name == "inventario_lote" %}<small class="lot-stock-hint">Selecciona un lote para ver el límite.</small>{% endif %}</label>{% endfor %}
+            <div class="inline-edit-actions"><button class="button tiny ghost" type="button" data-close-panel="add-product-{{ venta.id }}">Cancelar</button><button class="button tiny primary" type="submit">Agregar</button></div>
+          </form>
+
+          <div class="sale-products-heading">
+            <strong>Producto</strong><strong>Venta</strong><strong>Costo</strong><strong>Karen</strong><strong>Ganancia</strong><span></span>
+          </div>
+          {% for detalle in venta.detalles_calculados %}
+            <div class="sale-product-row">
+              <div><strong>{{ detalle.producto.nombre }}</strong><small>{{ detalle.cantidad }} × S/ {{ detalle.precio_unitario_venta|floatformat:2 }}</small></div>
+              <div><strong>S/ {{ detalle.precio_venta_total|floatformat:2 }}</strong>{% if detalle.descuento_asignado %}<small>Desc. S/ {{ detalle.descuento_asignado|floatformat:2 }}</small>{% endif %}</div>
+              <div><strong>S/ {{ detalle.costo_total|floatformat:2 }}</strong></div>
+              <div><strong>S/ {{ detalle.comision_karen|floatformat:2 }}</strong></div>
+              <div class="product-profit {% if detalle.mi_ganancia < 0 %}negative{% endif %}"><strong>S/ {{ detalle.mi_ganancia|floatformat:2 }}</strong></div>
+              <button class="button tiny ghost" type="button" data-panel-target="edit-product-{{ detalle.id }}">Editar</button>
+            </div>
+            <form class="inline-edit-panel product-inline-form" id="edit-product-{{ detalle.id }}" action="{% url 'negocio:detalle_venta_editar' detalle.id %}" method="post" hidden>
+              {% csrf_token %}
+              {% for field in detalle.form_edicion %}<label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.name == "inventario_lote" %}<small class="lot-stock-hint">El stock incluye las unidades actuales de esta fila.</small>{% endif %}</label>{% endfor %}
+              <div class="inline-edit-actions"><button class="button tiny ghost" type="button" data-close-panel="edit-product-{{ detalle.id }}">Cancelar</button><button class="button tiny primary" type="submit">Guardar</button></div>
+            </form>
+          {% empty %}
+            <p class="table-empty">Esta venta no tiene productos registrados.</p>
+          {% endfor %}
+        </div>
+      </article>
+    {% endfor %}
   </section>
 {% else %}
   <section class="empty-state">
     <h2>No encontramos ventas</h2>
-    <p>Prueba con otro mes o método de pago.</p>
-    <a class="button primary" href="{% url 'negocio:ventas' %}">Ver todas</a>
+    <p>Prueba con otro mes o método de pago, o registra una nueva venta arriba.</p>
   </section>
 {% endif %}
 {% endblock %}

@@ -1,14 +1,14 @@
 document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll(".sale-summary-row").forEach((row) => {
+  document.querySelectorAll("[data-sale-toggle]").forEach((row) => {
     const toggle = () => {
       const detail = document.querySelector(`#sale-detail-${row.dataset.saleToggle}`);
       const willOpen = detail.hidden;
       detail.hidden = !willOpen;
       row.setAttribute("aria-expanded", String(willOpen));
-      row.classList.toggle("expanded", willOpen);
+      row.closest(".sale-card")?.classList.toggle("expanded", willOpen);
     };
     row.addEventListener("click", (event) => {
-      if (event.target.closest("button, a")) return;
+      if (event.target.closest("button, a, form, input, select, textarea, label")) return;
       toggle();
     });
     row.addEventListener("keydown", (event) => {
@@ -17,6 +17,24 @@ document.addEventListener("DOMContentLoaded", () => {
         toggle();
       }
     });
+  });
+
+  document.addEventListener("click", (event) => {
+    const opener = event.target.closest("[data-panel-target]");
+    if (opener) {
+      const panel = document.getElementById(opener.dataset.panelTarget);
+      if (panel) {
+        panel.hidden = false;
+        panel.querySelector("select, input, textarea")?.focus();
+        panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+      return;
+    }
+    const closer = event.target.closest("[data-close-panel]");
+    if (closer) {
+      const panel = document.getElementById(closer.dataset.closePanel);
+      if (panel) panel.hidden = true;
+    }
   });
 
   document.querySelectorAll(".copy-phone").forEach((button) => {
@@ -238,4 +256,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
     lines.querySelectorAll(".sale-line").forEach(updateLotLimit);
   }
+
+  const updateInlineLotLimit = (form) => {
+    const select = form.querySelector('select[name$="-inventario_lote"]');
+    const quantity = form.querySelector('input[name$="-cantidad"]');
+    const hint = form.querySelector(".lot-stock-hint");
+    const option = select?.selectedOptions[0];
+    const stock = Number(option?.dataset.stock);
+    if (!quantity || !hint) return;
+    if (option?.value && Number.isFinite(stock)) {
+      quantity.max = stock;
+      hint.textContent = `Costo del lote: S/ ${option.dataset.cost} · Máximo disponible: ${stock}`;
+    } else {
+      quantity.removeAttribute("max");
+    }
+  };
+
+  document.querySelectorAll(".product-inline-form").forEach((form) => {
+    updateInlineLotLimit(form);
+    form.addEventListener("change", (event) => {
+      if (event.target.matches('select[name$="-inventario_lote"]')) {
+        updateInlineLotLimit(form);
+      }
+    });
+  });
 });

@@ -1,5 +1,5 @@
 from django import forms
-from django.db.models import F, IntegerField, Sum, Value
+from django.db.models import Case, F, IntegerField, Sum, Value, When
 from django.db.models.functions import Coalesce
 
 from .models import (
@@ -16,7 +16,12 @@ from .models import (
 )
 
 
-def lotes_con_stock():
+def lotes_con_stock(incluir_lote_id=None, cantidad_reintegrada=0):
+    reintegro = Case(
+        When(pk=incluir_lote_id, then=Value(cantidad_reintegrada)),
+        default=Value(0),
+        output_field=IntegerField(),
+    )
     return (
         InventarioLote.objects.select_related(
             "producto", "paquete", "paquete__pedido"
@@ -26,7 +31,9 @@ def lotes_con_stock():
                 Sum("salidas__cantidad"), Value(0), output_field=IntegerField()
             )
         )
-        .annotate(stock_disponible=F("cantidad_inicial") - F("cantidad_usada"))
+        .annotate(
+            stock_disponible=F("cantidad_inicial") - F("cantidad_usada") + reintegro
+        )
         .filter(paquete__entregado=True, stock_disponible__gt=0)
         .order_by("producto__nombre", "paquete__pedido__fecha", "id")
     )
@@ -220,6 +227,41 @@ class VentaForm(forms.ModelForm):
         )
 
 
+class VentaEditarForm(forms.ModelForm):
+    class Meta:
+        model = Venta
+        fields = [
+            "cliente",
+            "tipo_pago",
+            "direccion_entrega",
+            "descuento",
+            "pagado",
+            "estado_entrega",
+        ]
+        labels = {
+            "cliente": "Cliente",
+            "tipo_pago": "Método de pago",
+            "direccion_entrega": "Dirección",
+            "descuento": "Descuento S/",
+            "pagado": "Pagado",
+            "estado_entrega": "Entrega",
+        }
+        widgets = {
+            "direccion_entrega": forms.TextInput(attrs={"placeholder": "Opcional"}),
+            "descuento": forms.NumberInput(attrs={"min": "0", "step": "0.01"}),
+            "estado_entrega": forms.Select(
+                choices=[
+                    ("No entregado", "No entregado"),
+                    ("Entregado", "Entregado"),
+                ]
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["cliente"].required = False
+
+
 class DetalleVentaForm(forms.ModelForm):
     inventario_lote = LoteChoiceField(
         queryset=InventarioLote.objects.none(),
@@ -253,7 +295,23 @@ class DetalleVentaForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["inventario_lote"].queryset = lotes_con_stock()
+        lote_actual = None
+        cantidad_actual = 0
+        if self.instance and self.instance.pk:
+            salida = self.instance.salidas.select_related("inventario_lote").first()
+            if salida:
+                lote_actual = salida.inventario_lote
+                cantidad_actual = salida.cantidad
+                self.initial["inventario_lote"] = lote_actual
+            distribucion = self.instance.distribuciones_ganancia.filter(
+                persona__nombre__iexact="Karen"
+            ).first()
+            if distribucion:
+                self.initial["comision_karen"] = distribucion.monto
+        self.fields["inventario_lote"].queryset = lotes_con_stock(
+            lote_actual.id if lote_actual else None,
+            cantidad_actual,
+        )
         self.order_fields(
             [
                 "inventario_lote",

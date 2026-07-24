@@ -414,6 +414,83 @@ class VistasNegocioTests(TestCase):
             Venta.objects.filter(direccion_entrega="Venta doble imposible").exists()
         )
 
+    def test_ventas_muestra_creacion_inline_y_diseno_sin_tabla_ancha(self):
+        response = self.client.get(reverse("negocio:ventas"))
+        self.assertContains(response, 'id="new-sale-panel"')
+        self.assertContains(response, 'class="sale-card')
+        self.assertNotContains(response, 'class="sales-table"')
+
+    def test_edita_los_datos_necesarios_de_venta_inline(self):
+        response = self.client.post(
+            reverse("negocio:venta_editar", args=[self.venta_julio.id]),
+            {
+                f"venta-{self.venta_julio.id}-cliente": self.cliente.id,
+                f"venta-{self.venta_julio.id}-tipo_pago": self.efectivo.id,
+                f"venta-{self.venta_julio.id}-direccion_entrega": "Nueva dirección",
+                f"venta-{self.venta_julio.id}-descuento": "4.00",
+                f"venta-{self.venta_julio.id}-estado_entrega": "No entregado",
+            },
+        )
+        self.assertRedirects(
+            response,
+            f"{reverse('negocio:ventas')}?abierta={self.venta_julio.id}",
+        )
+        self.venta_julio.refresh_from_db()
+        self.assertEqual(self.venta_julio.tipo_pago, self.efectivo)
+        self.assertEqual(self.venta_julio.direccion_entrega, "Nueva dirección")
+        self.assertEqual(self.venta_julio.descuento, Decimal("4.00"))
+        self.assertFalse(self.venta_julio.pagado)
+        self.assertEqual(self.venta_julio.estado_entrega, "No entregado")
+
+    def test_agrega_producto_a_venta_desde_la_sublista(self):
+        response = self.client.post(
+            reverse(
+                "negocio:venta_producto_agregar", args=[self.venta_junio.id]
+            ),
+            {
+                f"nuevo-{self.venta_junio.id}-inventario_lote": self.lote.id,
+                f"nuevo-{self.venta_junio.id}-cantidad": "2",
+                f"nuevo-{self.venta_junio.id}-precio_unitario_venta": "42.00",
+                f"nuevo-{self.venta_junio.id}-comision_karen": "6.00",
+            },
+        )
+        self.assertRedirects(
+            response,
+            f"{reverse('negocio:ventas')}?abierta={self.venta_junio.id}",
+        )
+        detalle = self.venta_junio.detalles.get()
+        self.assertEqual(detalle.cantidad, 2)
+        self.assertEqual(detalle.salidas.get().inventario_lote, self.lote)
+        self.assertEqual(
+            detalle.distribuciones_ganancia.get(persona__nombre="Karen").monto,
+            Decimal("6.00"),
+        )
+
+    def test_edita_producto_inline_reintegrando_su_stock_actual(self):
+        response = self.client.post(
+            reverse("negocio:detalle_venta_editar", args=[self.detalle.id]),
+            {
+                f"detalle-{self.detalle.id}-inventario_lote": self.lote.id,
+                f"detalle-{self.detalle.id}-cantidad": "5",
+                f"detalle-{self.detalle.id}-precio_unitario_venta": "38.00",
+                f"detalle-{self.detalle.id}-comision_karen": "9.00",
+            },
+        )
+        self.assertRedirects(
+            response,
+            f"{reverse('negocio:ventas')}?abierta={self.venta_julio.id}",
+        )
+        self.detalle.refresh_from_db()
+        self.assertEqual(self.detalle.cantidad, 5)
+        self.assertEqual(self.detalle.precio_unitario_venta, Decimal("38.00"))
+        self.assertEqual(self.detalle.salidas.get().cantidad, 5)
+        self.assertEqual(
+            self.detalle.distribuciones_ganancia.get(
+                persona__nombre="Karen"
+            ).monto,
+            Decimal("9.00"),
+        )
+
     def test_crea_cliente_y_metodo_pago_desde_catalogos(self):
         cliente_response = self.client.post(
             reverse("negocio:catalogos"),
