@@ -220,22 +220,91 @@ def producto_eliminar(request, producto_id):
     )
 
 
-def pedidos(request):
-    items = Pedido.objects.annotate(
-        total_paquetes=Count("paquetes", distinct=True),
-        paquetes_entregados=Count(
-            "paquetes", filter=Q(paquetes__entregado=True), distinct=True
-        ),
-        total_unidades=Coalesce(
-            Sum("paquetes__lotes__cantidad_inicial"),
-            Value(0),
-            output_field=IntegerField(),
-        ),
+def pedidos(request, contexto_creacion=None, pedido_abierto=None):
+    items = (
+        Pedido.objects.prefetch_related(
+            "paquetes__lotes__producto__marca",
+            "paquetes__lotes__producto__tipo_producto",
+        )
+        .annotate(
+            total_paquetes=Count("paquetes", distinct=True),
+            paquetes_entregados=Count(
+                "paquetes", filter=Q(paquetes__entregado=True), distinct=True
+            ),
+            total_unidades=Coalesce(
+                Sum("paquetes__lotes__cantidad_inicial"),
+                Value(0),
+                output_field=IntegerField(),
+            ),
+        )
     )
-    return render(request, "negocio/pedidos.html", {"pedidos": items})
+    for pedido in items:
+        pedido.costo_total = Decimal("0")
+        for paquete in pedido.paquetes.all():
+            for lote in paquete.lotes.all():
+                lote.costo_total = (
+                    Decimal(lote.cantidad_inicial) * lote.costo_unitario_soles
+                )
+                pedido.costo_total += lote.costo_total
+
+    if contexto_creacion is None:
+        contexto_creacion = {
+            "form": PedidoForm(initial={"fecha": timezone.localtime()}),
+            "paquetes": [
+                {
+                    "indice": 0,
+                    "form": PaquetePedidoForm(prefix="paquete-0"),
+                    "lotes": [
+                        {
+                            "indice": 0,
+                            "form": LotePedidoForm(prefix="lote-0-0"),
+                        }
+                    ],
+                    "total_lotes": 1,
+                }
+            ],
+            "total_paquetes": 1,
+            "paquetes_activos": 1,
+            "formulario_pedido_abierto": request.GET.get("crear") == "1",
+        }
+    contexto_creacion["productos_disponibles"] = Producto.objects.all()
+
+    return render(
+        request,
+        "negocio/pedidos.html",
+        {
+            "pedidos": items,
+            "pedido_abierto": pedido_abierto or request.GET.get("abierto", ""),
+            **contexto_creacion,
+        },
+    )
 
 
 def pedido_crear(request):
+    if request.method != "POST":
+        return pedidos(
+            request,
+            {
+                "form": PedidoForm(initial={"fecha": timezone.localtime()}),
+                "paquetes": [
+                    {
+                        "indice": 0,
+                        "form": PaquetePedidoForm(prefix="paquete-0"),
+                        "lotes": [
+                            {
+                                "indice": 0,
+                                "form": LotePedidoForm(prefix="lote-0-0"),
+                            }
+                        ],
+                        "total_lotes": 1,
+                    }
+                ],
+                "total_paquetes": 1,
+                "paquetes_activos": 1,
+                "formulario_pedido_abierto": True,
+            },
+        )
+
     if request.method == "POST":
         form = PedidoForm(request.POST)
         total_paquetes = _entero_acotado(request.POST.get("package_count"), 1, 1, 20)
@@ -331,15 +400,14 @@ def pedido_crear(request):
             )
             return redirect("negocio:pedido_detalle", pedido_id=pedido.id)
 
-    return render(
+    return pedidos(
         request,
-        "negocio/pedido_form.html",
         {
             "form": form,
             "paquetes": paquetes,
             "total_paquetes": total_paquetes,
             "paquetes_activos": len(paquetes),
-            "productos_disponibles": Producto.objects.all(),
+            "formulario_pedido_abierto": True,
         },
     )
 
@@ -372,14 +440,8 @@ def pedido_eliminar(request, pedido_id):
 
 
 def pedido_detalle(request, pedido_id):
-    pedido = get_object_or_404(
-        Pedido.objects.prefetch_related(
-            "paquetes__lotes__producto__marca",
-            "paquetes__lotes__producto__tipo_producto",
-        ),
-        pk=pedido_id,
-    )
-    return render(request, "negocio/pedido_detalle.html", {"pedido": pedido})
+    get_object_or_404(Pedido, pk=pedido_id)
+    return pedidos(request, pedido_abierto=str(pedido_id))
 
 
 def catalogos(request):

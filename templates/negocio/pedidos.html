@@ -5,39 +5,83 @@
   <div>
     <p class="eyebrow">Compras e importación</p>
     <h1>Paquetería</h1>
-    <p class="subtitle">Revisa los paquetes que vienen en camino y los que ya ingresaron al inventario.</p>
-  </div>
-  <div class="heading-actions">
-    <span class="count-pill">{{ pedidos|length }} pedido{{ pedidos|length|pluralize }}</span>
-    <a class="button primary" href="{% url 'negocio:pedido_crear' %}">+ Nuevo registro</a>
+    <p class="subtitle">Compras, paquetes y productos en una sola pantalla.</p>
   </div>
 </section>
 
+<div class="parcel-toolbar">
+  <span class="count-pill">{{ pedidos|length }} pedido{{ pedidos|length|pluralize }}</span>
+  <button class="button primary" type="button" data-panel-target="new-order-panel">+ Nuevo registro</button>
+</div>
+
+{% include "negocio/_pedido_form_inline.html" %}
+
 {% if pedidos %}
-  <section class="order-list">
+  <section class="parcel-list">
     {% for pedido in pedidos %}
-      <a class="order-card" href="{% url 'negocio:pedido_detalle' pedido.id %}">
-        <div class="order-icon">#{{ pedido.id }}</div>
-        <div class="order-main">
-          <div class="order-title">
-            <h2>{{ pedido.propietario|default:"Pedido sin propietario" }}</h2>
-            <span>{{ pedido.fecha|date:"d M Y" }}</span>
+      <article class="parcel-order {% if pedido_abierto == pedido.id|stringformat:'s' %}expanded{% endif %}">
+        <div class="parcel-summary" tabindex="0" role="button" aria-expanded="{% if pedido_abierto == pedido.id|stringformat:'s' %}true{% else %}false{% endif %}" aria-controls="parcel-detail-{{ pedido.id }}" data-order-toggle="{{ pedido.id }}">
+          <div class="parcel-date">
+            <button class="sale-chevron" type="button" tabindex="-1" aria-label="Ver paquetes">›</button>
+            <div><strong>{{ pedido.fecha|date:"d M Y" }}</strong><small>{{ pedido.fecha|date:"H:i" }}</small></div>
           </div>
-          <p>{{ pedido.cuenta|default:"Sin cuenta registrada" }} · {{ pedido.direccion|default:"Sin dirección" }}</p>
-          <div class="order-metrics">
-            <span><strong>{{ pedido.total_paquetes }}</strong> paquetes</span>
-            <span><strong>{{ pedido.total_unidades }}</strong> unidades</span>
-            <span><strong>{{ pedido.paquetes_entregados }}/{{ pedido.total_paquetes }}</strong> entregados</span>
+          <div class="parcel-owner">
+            <strong>{{ pedido.propietario|default:"Sin propietario" }}</strong>
+            <small>{{ pedido.cuenta|default:"Sin cuenta" }} · {{ pedido.direccion|default:"Sin dirección" }}</small>
+          </div>
+          <div class="parcel-metric"><span>Paquetes</span><strong>{{ pedido.total_paquetes }}</strong><small>{{ pedido.paquetes_entregados }} entregados</small></div>
+          <div class="parcel-metric"><span>Unidades</span><strong>{{ pedido.total_unidades }}</strong></div>
+          <div class="parcel-metric"><span>Costo total</span><strong>S/ {{ pedido.costo_total|floatformat:2 }}</strong><small>Desc. S/ {{ pedido.descuento|floatformat:2 }}</small></div>
+          <div class="parcel-metric"><span>Dólar</span><strong>{% if pedido.dolar_valor %}S/ {{ pedido.dolar_valor|floatformat:4 }}{% else %}—{% endif %}</strong></div>
+          <form class="parcel-delete-form" action="{% url 'negocio:pedido_eliminar' pedido.id %}" method="post" onsubmit="return confirm('¿Eliminar este registro de paquetería?');">
+            {% csrf_token %}
+            <button class="button tiny danger" type="submit">Eliminar</button>
+          </form>
+        </div>
+
+        <div class="parcel-detail" id="parcel-detail-{{ pedido.id }}" {% if pedido_abierto != pedido.id|stringformat:'s' %}hidden{% endif %}>
+          <div class="parcel-info-strip">
+            <div><span>Cuenta</span><strong>{{ pedido.cuenta|default:"No registrada" }}</strong></div>
+            <div><span>Propietario</span><strong>{{ pedido.propietario|default:"No registrado" }}</strong></div>
+            <div><span>Dirección</span><strong>{{ pedido.direccion|default:"No registrada" }}</strong></div>
+            <div><span>Descuento</span><strong>S/ {{ pedido.descuento|floatformat:2 }}</strong></div>
+          </div>
+
+          <div class="parcel-packages">
+            {% for paquete in pedido.paquetes.all %}
+              <article class="parcel-package">
+                <header>
+                  <div>
+                    <span class="status {% if paquete.entregado %}success{% else %}pending{% endif %}">{% if paquete.entregado %}Entregado{% else %}En camino{% endif %}</span>
+                    <strong>{{ paquete.codigo_seguimiento|default:"Sin seguimiento" }}</strong>
+                  </div>
+                  <small>{% if paquete.fecha_entrega %}{{ paquete.fecha_entrega|date:"d M Y · H:i" }}{% else %}Sin fecha de entrega{% endif %}</small>
+                </header>
+                <div class="parcel-products-heading"><span>Producto</span><span>Marca / tipo</span><span>Cantidad</span><span>Costo unitario</span><span>Total</span></div>
+                {% for lote in paquete.lotes.all %}
+                  <div class="parcel-product-row">
+                    <div><strong>{{ lote.producto.nombre }}</strong></div>
+                    <div><span>{{ lote.producto.marca|default:"—" }} · {{ lote.producto.tipo_producto|default:"—" }}</span></div>
+                    <div><strong>{{ lote.cantidad_inicial }}</strong></div>
+                    <div><strong>S/ {{ lote.costo_unitario_soles|floatformat:2 }}</strong>{% if lote.costo_unitario_dolar %}<small>US$ {{ lote.costo_unitario_dolar|floatformat:2 }}</small>{% endif %}</div>
+                    <div><strong>S/ {{ lote.costo_total|floatformat:2 }}</strong></div>
+                  </div>
+                {% empty %}
+                  <p class="table-empty">Este paquete no tiene productos.</p>
+                {% endfor %}
+              </article>
+            {% empty %}
+              <p class="table-empty">Este pedido no tiene paquetes registrados.</p>
+            {% endfor %}
           </div>
         </div>
-        <span class="chevron" aria-hidden="true">›</span>
-      </a>
+      </article>
     {% endfor %}
   </section>
 {% else %}
   <section class="empty-state">
     <h2>Aún no hay registros de paquetería</h2>
-    <p>Cuando registres el primero aparecerá aquí.</p>
+    <p>Usa “Nuevo registro” para crear el primero.</p>
   </section>
 {% endif %}
 {% endblock %}

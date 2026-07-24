@@ -111,6 +111,21 @@ class VistasNegocioTests(TestCase):
         self.assertContains(detalle, "ABC")
         self.assertContains(detalle, "Producto A")
 
+    def test_paqueteria_integra_creacion_y_detalle_desplegable(self):
+        listado = self.client.get(reverse("negocio:pedidos"))
+        creacion = self.client.get(reverse("negocio:pedido_crear"))
+        detalle = self.client.get(
+            reverse("negocio:pedido_detalle", args=[self.pedido.id])
+        )
+        self.assertContains(listado, 'id="new-order-panel"')
+        self.assertContains(listado, 'data-order-toggle')
+        self.assertNotContains(creacion, 'id="new-order-panel" hidden')
+        self.assertContains(
+            detalle,
+            f'id="parcel-detail-{self.pedido.id}"',
+        )
+        self.assertContains(detalle, 'aria-expanded="true"')
+
     def test_ventas_filtra_mes_y_pago(self):
         response = self.client.get(
             reverse("negocio:ventas"),

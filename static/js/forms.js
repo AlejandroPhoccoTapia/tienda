@@ -19,6 +19,28 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  document.querySelectorAll("[data-order-toggle]").forEach((row) => {
+    const toggle = () => {
+      const detail = document.querySelector(
+        `#parcel-detail-${row.dataset.orderToggle}`
+      );
+      const willOpen = detail.hidden;
+      detail.hidden = !willOpen;
+      row.setAttribute("aria-expanded", String(willOpen));
+      row.closest(".parcel-order")?.classList.toggle("expanded", willOpen);
+    };
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("button, a, form, input, select, textarea, label")) return;
+      toggle();
+    });
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        toggle();
+      }
+    });
+  });
+
   document.addEventListener("click", (event) => {
     const opener = event.target.closest("[data-panel-target]");
     if (opener) {
