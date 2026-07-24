@@ -28,6 +28,11 @@ urlpatterns = [
         name="venta_editar",
     ),
     path(
+        "ventas/<int:venta_id>/cerrar/",
+        views.venta_cerrar,
+        name="venta_cerrar",
+    ),
+    path(
         "ventas/<int:venta_id>/productos/agregar/",
         views.venta_producto_agregar,
         name="venta_producto_agregar",

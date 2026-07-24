@@ -141,6 +141,8 @@ class Venta(models.Model):
     descuento = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     pagado = models.BooleanField(default=False)
     estado_entrega = models.CharField(max_length=50)
+    cerrada = models.BooleanField(default=False)
+    fecha_cierre = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-fecha"]

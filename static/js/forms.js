@@ -214,14 +214,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const updateLotLimit = (row) => {
       const select = row.querySelector('select[name$="-inventario_lote"]');
       const quantity = row.querySelector('input[name$="-cantidad"]');
+      const price = row.querySelector('input[name$="-precio_unitario_venta"]');
+      const commission = row.querySelector('input[name$="-comision_karen"]');
       const hint = row.querySelector(".lot-stock-hint");
       const option = select?.selectedOptions[0];
       const stock = Number(option?.dataset.stock);
-      if (option?.value && Number.isFinite(stock)) {
+      const cost = Number(option?.dataset.cost);
+      if (option?.value && Number.isFinite(stock) && Number.isFinite(cost)) {
+        const units = Math.max(1, Number(quantity?.value) || 1);
+        const karen = Math.max(0, Number(commission?.value) || 0);
+        const minimum = Math.ceil((cost + karen / units) * 100) / 100;
         quantity.max = stock;
-        hint.textContent = `Costo S/${option.dataset.cost} · Stock ${stock}`;
+        price.min = minimum.toFixed(2);
+        hint.textContent = `Costo S/${option.dataset.cost} · Stock ${stock} · Mín. S/${minimum.toFixed(2)} c/u`;
       } else {
         quantity.removeAttribute("max");
+        price?.removeAttribute("min");
         hint.textContent = "Selecciona un producto para ver costo y stock.";
       }
     };
@@ -238,6 +246,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     lines.addEventListener("change", (event) => {
       if (event.target.matches('select[name$="-inventario_lote"]')) {
+        updateLotLimit(event.target.closest(".sale-line"));
+      }
+    });
+    lines.addEventListener("input", (event) => {
+      if (
+        event.target.matches(
+          'input[name$="-cantidad"], input[name$="-comision_karen"]'
+        )
+      ) {
         updateLotLimit(event.target.closest(".sale-line"));
       }
     });
@@ -260,15 +277,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const updateInlineLotLimit = (form) => {
     const select = form.querySelector('select[name$="-inventario_lote"]');
     const quantity = form.querySelector('input[name$="-cantidad"]');
+    const price = form.querySelector('input[name$="-precio_unitario_venta"]');
+    const commission = form.querySelector('input[name$="-comision_karen"]');
     const hint = form.querySelector(".lot-stock-hint");
     const option = select?.selectedOptions[0];
     const stock = Number(option?.dataset.stock);
+    const cost = Number(option?.dataset.cost);
     if (!quantity || !hint) return;
-    if (option?.value && Number.isFinite(stock)) {
+    if (option?.value && Number.isFinite(stock) && Number.isFinite(cost)) {
+      const units = Math.max(1, Number(quantity.value) || 1);
+      const karen = Math.max(0, Number(commission?.value) || 0);
+      const minimum = Math.ceil((cost + karen / units) * 100) / 100;
       quantity.max = stock;
-      hint.textContent = `Costo S/${option.dataset.cost} · Stock ${stock}`;
+      price.min = minimum.toFixed(2);
+      hint.textContent = `Costo S/${option.dataset.cost} · Stock ${stock} · Mín. S/${minimum.toFixed(2)} c/u`;
     } else {
       quantity.removeAttribute("max");
+      price?.removeAttribute("min");
     }
   };
 
@@ -276,6 +301,15 @@ document.addEventListener("DOMContentLoaded", () => {
     updateInlineLotLimit(form);
     form.addEventListener("change", (event) => {
       if (event.target.matches('select[name$="-inventario_lote"]')) {
+        updateInlineLotLimit(form);
+      }
+    });
+    form.addEventListener("input", (event) => {
+      if (
+        event.target.matches(
+          'input[name$="-cantidad"], input[name$="-comision_karen"]'
+        )
+      ) {
         updateInlineLotLimit(form);
       }
     });

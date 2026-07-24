@@ -491,6 +491,97 @@ class VistasNegocioTests(TestCase):
             Decimal("9.00"),
         )
 
+    def test_no_permite_crear_una_venta_con_ganancia_negativa(self):
+        response = self.client.post(
+            reverse("negocio:venta_crear"),
+            {
+                "fecha": "2026-07-24T16:00",
+                "cliente": self.cliente.id,
+                "tipo_pago": self.yape.id,
+                "direccion_entrega": "Venta con pérdida",
+                "descuento": "0",
+                "estado_entrega": "No entregado",
+                "detalle_count": "1",
+                "detalle-0-inventario_lote": self.lote.id,
+                "detalle-0-cantidad": "1",
+                "detalle-0-precio_unitario_venta": "10.00",
+                "detalle-0-comision_karen": "2.00",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "precio unitario mínimo es S/22.00")
+        self.assertFalse(
+            Venta.objects.filter(direccion_entrega="Venta con pérdida").exists()
+        )
+
+    def test_no_permite_descuento_que_vuelva_negativa_la_ganancia(self):
+        response = self.client.post(
+            reverse("negocio:venta_crear"),
+            {
+                "fecha": "2026-07-24T16:00",
+                "cliente": self.cliente.id,
+                "tipo_pago": self.yape.id,
+                "direccion_entrega": "Descuento imposible",
+                "descuento": "6.00",
+                "estado_entrega": "No entregado",
+                "detalle_count": "1",
+                "detalle-0-inventario_lote": self.lote.id,
+                "detalle-0-cantidad": "1",
+                "detalle-0-precio_unitario_venta": "25.00",
+                "detalle-0-comision_karen": "0",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "descuento máximo")
+        self.assertFalse(
+            Venta.objects.filter(direccion_entrega="Descuento imposible").exists()
+        )
+
+    def test_cierra_venta_y_bloquea_ediciones_futuras(self):
+        response = self.client.post(
+            reverse("negocio:venta_cerrar", args=[self.venta_julio.id])
+        )
+        self.assertRedirects(
+            response,
+            f"{reverse('negocio:ventas')}?abierta={self.venta_julio.id}",
+        )
+        self.venta_julio.refresh_from_db()
+        self.assertTrue(self.venta_julio.cerrada)
+        self.assertIsNotNone(self.venta_julio.fecha_cierre)
+
+        self.client.post(
+            reverse("negocio:venta_editar", args=[self.venta_julio.id]),
+            {
+                f"venta-{self.venta_julio.id}-cliente": self.cliente.id,
+                f"venta-{self.venta_julio.id}-tipo_pago": self.efectivo.id,
+                f"venta-{self.venta_julio.id}-direccion_entrega": "No debe cambiar",
+                f"venta-{self.venta_julio.id}-descuento": "0",
+                f"venta-{self.venta_julio.id}-estado_entrega": "No entregado",
+            },
+        )
+        self.venta_julio.refresh_from_db()
+        self.assertNotEqual(self.venta_julio.direccion_entrega, "No debe cambiar")
+
+    def test_no_cierra_una_venta_que_tiene_perdida(self):
+        detalle = DetalleVenta.objects.create(
+            venta=self.venta_junio,
+            producto=self.producto_a,
+            cantidad=1,
+            precio_unitario_venta=Decimal("1.00"),
+        )
+        SalidaInventario.objects.create(
+            detalle_venta=detalle,
+            inventario_lote=self.lote,
+            cantidad=1,
+        )
+        response = self.client.post(
+            reverse("negocio:venta_cerrar", args=[self.venta_junio.id]),
+            follow=True,
+        )
+        self.venta_junio.refresh_from_db()
+        self.assertFalse(self.venta_junio.cerrada)
+        self.assertContains(response, "No se puede cerrar la venta")
+
     def test_crea_cliente_y_metodo_pago_desde_catalogos(self):
         cliente_response = self.client.post(
             reverse("negocio:catalogos"),

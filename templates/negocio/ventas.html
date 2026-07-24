@@ -106,7 +106,7 @@
 {% if ventas %}
   <section class="sales-list">
     {% for venta in ventas %}
-      <article class="sale-card {% if venta_abierta == venta.id|stringformat:'s' %}expanded{% endif %}" data-sale-card="{{ venta.id }}">
+      <article class="sale-card {% if venta.cerrada %}closed{% endif %} {% if venta_abierta == venta.id|stringformat:'s' %}expanded{% endif %}" data-sale-card="{{ venta.id }}">
         <div class="sale-card-summary" tabindex="0" role="button" aria-expanded="{% if venta_abierta == venta.id|stringformat:'s' %}true{% else %}false{% endif %}" aria-controls="sale-detail-{{ venta.id }}" data-sale-toggle="{{ venta.id }}">
           <div class="sale-identity">
             <button class="sale-chevron" type="button" tabindex="-1" aria-label="Ver productos">›</button>
@@ -128,7 +128,15 @@
             <small>{{ venta.unidades }} unidad{{ venta.unidades|pluralize:"es" }}</small>
           </div>
           <div class="sale-actions">
-            <button class="button tiny ghost" type="button" data-panel-target="sale-edit-{{ venta.id }}">Editar</button>
+            {% if venta.cerrada %}
+              <span class="status locked">Cerrada</span>
+            {% else %}
+              <button class="button tiny ghost" type="button" data-panel-target="sale-edit-{{ venta.id }}">Editar</button>
+              <form action="{% url 'negocio:venta_cerrar' venta.id %}" method="post" onsubmit="return confirm('¿Cerrar la venta #{{ venta.id }}? Después ya no se podrá editar.');">
+                {% csrf_token %}
+                <button class="button tiny close-sale" type="submit">Cerrar venta</button>
+              </form>
+            {% endif %}
           </div>
         </div>
 
@@ -139,27 +147,38 @@
           <div class="profit-cell {% if venta.mi_ganancia < 0 %}negative{% endif %}"><span>Mi ganancia</span><strong>S/ {{ venta.mi_ganancia|floatformat:2 }}</strong></div>
         </div>
 
-        <form class="inline-edit-panel compact-edit-grid" id="sale-edit-{{ venta.id }}" action="{% url 'negocio:venta_editar' venta.id %}" method="post" hidden>
-          {% csrf_token %}
-          {% for field in venta.form_edicion %}
-            <label class="{% if field.name == 'pagado' %}checkbox-field{% endif %}">
-              {% if field.name == "pagado" %}{{ field }} <span>{{ field.label }}</span>{% else %}<span>{{ field.label }}</span>{{ field }}{% endif %}
-            </label>
-          {% endfor %}
-          <div class="inline-edit-actions"><button class="button tiny ghost" type="button" data-close-panel="sale-edit-{{ venta.id }}">Cancelar</button><button class="button tiny primary" type="submit">Guardar venta</button></div>
-        </form>
+        {% if not venta.cerrada %}
+          <form class="inline-edit-panel compact-edit-grid" id="sale-edit-{{ venta.id }}" action="{% url 'negocio:venta_editar' venta.id %}" method="post" hidden>
+            {% csrf_token %}
+            {% for field in venta.form_edicion %}
+              <label class="{% if field.name == 'pagado' %}checkbox-field{% endif %}">
+                {% if field.name == "pagado" %}{{ field }} <span>{{ field.label }}</span>{% else %}<span>{{ field.label }}</span>{{ field }}{% endif %}
+              </label>
+            {% endfor %}
+            <div class="inline-edit-actions"><button class="button tiny ghost" type="button" data-close-panel="sale-edit-{{ venta.id }}">Cancelar</button><button class="button tiny primary" type="submit">Guardar venta</button></div>
+          </form>
+        {% endif %}
 
         <div class="sale-detail" id="sale-detail-{{ venta.id }}" {% if venta_abierta != venta.id|stringformat:'s' %}hidden{% endif %}>
           <div class="sale-products-toolbar">
-            <div><strong>Productos de la venta</strong><small>Edita únicamente producto, cantidad, precio o comisión.</small></div>
-            <button class="button tiny ghost" type="button" data-panel-target="add-product-{{ venta.id }}">+ Producto</button>
+            <div>
+              <strong>Productos de la venta</strong>
+              {% if venta.cerrada %}
+                <small>Registro cerrado el {{ venta.fecha_cierre|date:"d M Y · H:i" }}.</small>
+              {% else %}
+                <small>Edita únicamente producto, cantidad, precio o comisión.</small>
+              {% endif %}
+            </div>
+            {% if not venta.cerrada %}<button class="button tiny ghost" type="button" data-panel-target="add-product-{{ venta.id }}">+ Producto</button>{% endif %}
           </div>
 
-          <form class="inline-edit-panel product-inline-form" id="add-product-{{ venta.id }}" action="{% url 'negocio:venta_producto_agregar' venta.id %}" method="post" hidden>
-            {% csrf_token %}
-            {% for field in venta.form_producto_nuevo %}<label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.name == "inventario_lote" %}<small class="lot-stock-hint">Selecciona un producto para ver costo y stock.</small>{% endif %}</label>{% endfor %}
-            <div class="inline-edit-actions"><button class="button tiny ghost" type="button" data-close-panel="add-product-{{ venta.id }}">Cancelar</button><button class="button tiny primary" type="submit">Agregar</button></div>
-          </form>
+          {% if not venta.cerrada %}
+            <form class="inline-edit-panel product-inline-form" id="add-product-{{ venta.id }}" action="{% url 'negocio:venta_producto_agregar' venta.id %}" method="post" hidden>
+              {% csrf_token %}
+              {% for field in venta.form_producto_nuevo %}<label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.name == "inventario_lote" %}<small class="lot-stock-hint">Selecciona un producto para ver costo y stock.</small>{% endif %}</label>{% endfor %}
+              <div class="inline-edit-actions"><button class="button tiny ghost" type="button" data-close-panel="add-product-{{ venta.id }}">Cancelar</button><button class="button tiny primary" type="submit">Agregar</button></div>
+            </form>
+          {% endif %}
 
           <div class="sale-products-heading">
             <strong>Producto</strong><strong>Venta</strong><strong>Costo</strong><strong>Karen</strong><strong>Ganancia</strong><span></span>
@@ -171,13 +190,15 @@
               <div><strong>S/ {{ detalle.costo_total|floatformat:2 }}</strong></div>
               <div><strong>S/ {{ detalle.comision_karen|floatformat:2 }}</strong></div>
               <div class="product-profit {% if detalle.mi_ganancia < 0 %}negative{% endif %}"><strong>S/ {{ detalle.mi_ganancia|floatformat:2 }}</strong></div>
-              <button class="button tiny ghost" type="button" data-panel-target="edit-product-{{ detalle.id }}">Editar</button>
+              {% if not venta.cerrada %}<button class="button tiny ghost" type="button" data-panel-target="edit-product-{{ detalle.id }}">Editar</button>{% else %}<span></span>{% endif %}
             </div>
-            <form class="inline-edit-panel product-inline-form" id="edit-product-{{ detalle.id }}" action="{% url 'negocio:detalle_venta_editar' detalle.id %}" method="post" hidden>
-              {% csrf_token %}
-              {% for field in detalle.form_edicion %}<label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.name == "inventario_lote" %}<small class="lot-stock-hint">Costo y stock disponibles; incluye esta fila.</small>{% endif %}</label>{% endfor %}
-              <div class="inline-edit-actions"><button class="button tiny ghost" type="button" data-close-panel="edit-product-{{ detalle.id }}">Cancelar</button><button class="button tiny primary" type="submit">Guardar</button></div>
-            </form>
+            {% if not venta.cerrada %}
+              <form class="inline-edit-panel product-inline-form" id="edit-product-{{ detalle.id }}" action="{% url 'negocio:detalle_venta_editar' detalle.id %}" method="post" hidden>
+                {% csrf_token %}
+                {% for field in detalle.form_edicion %}<label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.name == "inventario_lote" %}<small class="lot-stock-hint">Costo y stock disponibles; incluye esta fila.</small>{% endif %}</label>{% endfor %}
+                <div class="inline-edit-actions"><button class="button tiny ghost" type="button" data-close-panel="edit-product-{{ detalle.id }}">Cancelar</button><button class="button tiny primary" type="submit">Guardar</button></div>
+              </form>
+            {% endif %}
           {% empty %}
             <p class="table-empty">Esta venta no tiene productos registrados.</p>
           {% endfor %}

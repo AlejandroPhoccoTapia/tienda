@@ -1,4 +1,4 @@
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
 
 from django.db.models import (
     Count,
@@ -57,6 +57,77 @@ def _entero_acotado(valor, predeterminado=1, minimo=1, maximo=30):
         return max(minimo, min(int(valor), maximo))
     except (TypeError, ValueError):
         return predeterminado
+
+
+def _margen_formulario_detalle(form):
+    lote = form.cleaned_data["inventario_lote"]
+    cantidad = Decimal(form.cleaned_data["cantidad"])
+    precio = form.cleaned_data["precio_unitario_venta"]
+    comision = form.cleaned_data.get("comision_karen") or Decimal("0")
+    costo = cantidad * lote.costo_unitario_soles
+    return cantidad * precio - costo - comision
+
+
+def _validar_detalle_sin_perdida(form):
+    margen = _margen_formulario_detalle(form)
+    if margen >= 0:
+        return margen
+    lote = form.cleaned_data["inventario_lote"]
+    cantidad = Decimal(form.cleaned_data["cantidad"])
+    comision = form.cleaned_data.get("comision_karen") or Decimal("0")
+    precio_minimo = (
+        lote.costo_unitario_soles + (comision / cantidad)
+    ).quantize(Decimal("0.01"), rounding=ROUND_CEILING)
+    form.add_error(
+        "precio_unitario_venta",
+        f"Para no tener pérdidas, el precio unitario mínimo es S/{precio_minimo}.",
+    )
+    return None
+
+
+def _margen_venta_actual(venta, omitir_detalle_id=None):
+    detalles = (
+        venta.detalles.exclude(pk=omitir_detalle_id)
+        .prefetch_related(
+            "salidas__inventario_lote",
+            "distribuciones_ganancia__persona",
+        )
+    )
+    margen_total = Decimal("0")
+    hay_linea_negativa = False
+    for detalle in detalles:
+        venta_producto = Decimal(detalle.cantidad) * detalle.precio_unitario_venta
+        costo = sum(
+            (
+                Decimal(salida.cantidad)
+                * salida.inventario_lote.costo_unitario_soles
+                for salida in detalle.salidas.all()
+            ),
+            Decimal("0"),
+        )
+        comision = sum(
+            (
+                distribucion.monto
+                for distribucion in detalle.distribuciones_ganancia.all()
+                if distribucion.persona.nombre.casefold() == "karen"
+            ),
+            Decimal("0"),
+        )
+        margen = venta_producto - costo - comision
+        margen_total += margen
+        hay_linea_negativa = hay_linea_negativa or margen < 0
+    return margen_total, hay_linea_negativa
+
+
+def _primer_error_formulario(form, predeterminado):
+    return next(
+        (
+            str(mensaje)
+            for mensajes in form.errors.values()
+            for mensaje in mensajes
+        ),
+        predeterminado,
+    )
 
 
 def productos(request):
@@ -609,34 +680,48 @@ def ventas(request, contexto_creacion=None):
     for venta in items:
         descuento_restante = venta.descuento
         detalles = venta.detalles_calculados
-        for indice, detalle in enumerate(detalles):
+        for detalle in detalles:
             detalle.precio_venta_total = (
                 Decimal(detalle.cantidad) * detalle.precio_unitario_venta
             )
-            if indice == len(detalles) - 1:
+            detalle.margen_antes_descuento = (
+                detalle.precio_venta_total
+                - detalle.costo_total
+                - detalle.comision_karen
+            )
+        detalles_con_margen = [
+            detalle for detalle in detalles if detalle.margen_antes_descuento > 0
+        ]
+        margen_disponible = sum(
+            (detalle.margen_antes_descuento for detalle in detalles_con_margen),
+            Decimal("0"),
+        )
+        for detalle in detalles:
+            if detalle not in detalles_con_margen:
+                detalle.descuento_asignado = Decimal("0")
+            elif detalle is detalles_con_margen[-1]:
                 detalle.descuento_asignado = descuento_restante
-            elif venta.subtotal:
+            elif margen_disponible:
                 detalle.descuento_asignado = (
                     venta.descuento
-                    * detalle.precio_venta_total
-                    / venta.subtotal
+                    * detalle.margen_antes_descuento
+                    / margen_disponible
                 ).quantize(centimo, rounding=ROUND_HALF_UP)
                 descuento_restante -= detalle.descuento_asignado
             else:
                 detalle.descuento_asignado = Decimal("0")
             detalle.mi_ganancia = (
-                detalle.precio_venta_total
-                - detalle.descuento_asignado
-                - detalle.costo_total
-                - detalle.comision_karen
+                detalle.margen_antes_descuento - detalle.descuento_asignado
             )
-            detalle.form_edicion = DetalleVentaForm(
-                instance=detalle, prefix=f"detalle-{detalle.id}"
+            if not venta.cerrada:
+                detalle.form_edicion = DetalleVentaForm(
+                    instance=detalle, prefix=f"detalle-{detalle.id}"
+                )
+        if not venta.cerrada:
+            venta.form_edicion = VentaEditarForm(
+                instance=venta, prefix=f"venta-{venta.id}"
             )
-        venta.form_edicion = VentaEditarForm(
-            instance=venta, prefix=f"venta-{venta.id}"
-        )
-        venta.form_producto_nuevo = DetalleVentaForm(prefix=f"nuevo-{venta.id}")
+            venta.form_producto_nuevo = DetalleVentaForm(prefix=f"nuevo-{venta.id}")
     resumen = {
         "costo_total": sum(
             (venta.costo_total for venta in items), Decimal("0")
@@ -740,11 +825,17 @@ def venta_crear(request):
 
         cantidades_por_lote = {}
         formularios_por_lote = {}
+        margen_total = Decimal("0")
         for detalle_fila in detalles:
             detalle_form = detalle_fila["form"]
             valido_detalle = detalle_form.is_valid()
             valido = valido and valido_detalle
             if valido_detalle:
+                margen_detalle = _validar_detalle_sin_perdida(detalle_form)
+                if margen_detalle is None:
+                    valido = False
+                else:
+                    margen_total += margen_detalle
                 lote = detalle_form.cleaned_data["inventario_lote"]
                 cantidades_por_lote[lote.id] = (
                     cantidades_por_lote.get(lote.id, 0)
@@ -766,6 +857,13 @@ def venta_crear(request):
                             f"{disponible} disponibles.",
                         )
                     valido = False
+
+        if valido and form.cleaned_data["descuento"] > margen_total:
+            form.add_error(
+                "descuento",
+                f"El descuento máximo para no tener pérdidas es S/{margen_total:.2f}.",
+            )
+            valido = False
 
         if valido:
             with transaction.atomic():
@@ -808,54 +906,97 @@ def venta_crear(request):
 
 def venta_editar(request, venta_id):
     venta = get_object_or_404(Venta, pk=venta_id)
+    if venta.cerrada:
+        messages.error(request, f"La venta #{venta.id} está cerrada y ya no se puede editar.")
+        return redirect(f"{reverse('negocio:ventas')}?abierta={venta.id}")
     if request.method == "POST":
         form = VentaEditarForm(
             request.POST, instance=venta, prefix=f"venta-{venta.id}"
         )
         if form.is_valid():
-            form.save()
-            messages.success(request, f"Venta #{venta.id} actualizada.")
+            margen_total, _ = _margen_venta_actual(venta)
+            if form.cleaned_data["descuento"] > margen_total:
+                messages.error(
+                    request,
+                    f"El descuento máximo para no tener pérdidas es S/{max(margen_total, Decimal('0')):.2f}.",
+                )
+            else:
+                form.save()
+                messages.success(request, f"Venta #{venta.id} actualizada.")
         else:
             messages.error(request, "No se pudo actualizar la venta. Revisa los datos.")
     return redirect(f"{reverse('negocio:ventas')}?abierta={venta.id}")
 
 
+def venta_cerrar(request, venta_id):
+    venta = get_object_or_404(Venta, pk=venta_id)
+    if request.method == "POST":
+        if venta.cerrada:
+            messages.info(request, f"La venta #{venta.id} ya estaba cerrada.")
+        else:
+            margen_total, hay_linea_negativa = _margen_venta_actual(venta)
+            if hay_linea_negativa or margen_total < venta.descuento:
+                messages.error(
+                    request,
+                    "No se puede cerrar la venta porque genera una pérdida. "
+                    "Corrige los precios, la comisión o el descuento.",
+                )
+            else:
+                venta.cerrada = True
+                venta.fecha_cierre = timezone.now()
+                venta.save(update_fields=["cerrada", "fecha_cierre"])
+                messages.success(
+                    request,
+                    f"Venta #{venta.id} cerrada. Quedó guardada como registro.",
+                )
+    return redirect(f"{reverse('negocio:ventas')}?abierta={venta.id}")
+
+
 def venta_producto_agregar(request, venta_id):
     venta = get_object_or_404(Venta, pk=venta_id)
+    if venta.cerrada:
+        messages.error(request, f"La venta #{venta.id} está cerrada y ya no acepta productos.")
+        return redirect(f"{reverse('negocio:ventas')}?abierta={venta.id}")
     if request.method == "POST":
         form = DetalleVentaForm(request.POST, prefix=f"nuevo-{venta.id}")
         if form.is_valid():
-            with transaction.atomic():
-                lote = form.cleaned_data["inventario_lote"]
-                detalle = form.save(commit=False)
-                detalle.venta = venta
-                detalle.producto = lote.producto
-                detalle.save()
-                SalidaInventario.objects.create(
-                    detalle_venta=detalle,
-                    inventario_lote=lote,
-                    cantidad=detalle.cantidad,
+            margen_detalle = _validar_detalle_sin_perdida(form)
+            margen_actual, _ = _margen_venta_actual(venta)
+            if (
+                margen_detalle is not None
+                and margen_actual + margen_detalle >= venta.descuento
+            ):
+                with transaction.atomic():
+                    lote = form.cleaned_data["inventario_lote"]
+                    detalle = form.save(commit=False)
+                    detalle.venta = venta
+                    detalle.producto = lote.producto
+                    detalle.save()
+                    SalidaInventario.objects.create(
+                        detalle_venta=detalle,
+                        inventario_lote=lote,
+                        cantidad=detalle.cantidad,
+                    )
+                    persona_karen, _ = PersonaGanancia.objects.get_or_create(
+                        nombre="Karen"
+                    )
+                    DistribucionGanancia.objects.create(
+                        venta=venta,
+                        detalle_venta=detalle,
+                        persona=persona_karen,
+                        monto=form.cleaned_data.get("comision_karen") or 0,
+                    )
+                messages.success(request, "Producto agregado a la venta.")
+            elif margen_detalle is not None:
+                form.add_error(
+                    "precio_unitario_venta",
+                    "La venta completa quedaría con ganancia negativa.",
                 )
-                persona_karen, _ = PersonaGanancia.objects.get_or_create(
-                    nombre="Karen"
-                )
-                DistribucionGanancia.objects.create(
-                    venta=venta,
-                    detalle_venta=detalle,
-                    persona=persona_karen,
-                    monto=form.cleaned_data.get("comision_karen") or 0,
-                )
-            messages.success(request, "Producto agregado a la venta.")
-        else:
-            error = next(
-                (
-                    str(mensaje)
-                    for mensajes in form.errors.values()
-                    for mensaje in mensajes
-                ),
-                "Revisa los datos del producto.",
+        if form.errors:
+            messages.error(
+                request,
+                _primer_error_formulario(form, "Revisa los datos del producto."),
             )
-            messages.error(request, error)
     return redirect(f"{reverse('negocio:ventas')}?abierta={venta.id}")
 
 
@@ -863,6 +1004,12 @@ def detalle_venta_editar(request, detalle_id):
     detalle = get_object_or_404(
         DetalleVenta.objects.select_related("venta"), pk=detalle_id
     )
+    if detalle.venta.cerrada:
+        messages.error(
+            request,
+            f"La venta #{detalle.venta_id} está cerrada y ya no se puede editar.",
+        )
+        return redirect(f"{reverse('negocio:ventas')}?abierta={detalle.venta_id}")
     if request.method == "POST":
         form = DetalleVentaForm(
             request.POST,
@@ -870,37 +1017,45 @@ def detalle_venta_editar(request, detalle_id):
             prefix=f"detalle-{detalle.id}",
         )
         if form.is_valid():
-            with transaction.atomic():
-                lote = form.cleaned_data["inventario_lote"]
-                detalle = form.save(commit=False)
-                detalle.producto = lote.producto
-                detalle.save()
-                detalle.salidas.all().delete()
-                SalidaInventario.objects.create(
-                    detalle_venta=detalle,
-                    inventario_lote=lote,
-                    cantidad=detalle.cantidad,
-                )
-                persona_karen, _ = PersonaGanancia.objects.get_or_create(
-                    nombre="Karen"
-                )
-                DistribucionGanancia.objects.update_or_create(
-                    detalle_venta=detalle,
-                    persona=persona_karen,
-                    defaults={
-                        "venta": detalle.venta,
-                        "monto": form.cleaned_data.get("comision_karen") or 0,
-                    },
-                )
-            messages.success(request, "Producto actualizado.")
-        else:
-            error = next(
-                (
-                    str(mensaje)
-                    for mensajes in form.errors.values()
-                    for mensaje in mensajes
-                ),
-                "Revisa los datos del producto.",
+            margen_detalle = _validar_detalle_sin_perdida(form)
+            margen_restante, _ = _margen_venta_actual(
+                detalle.venta, omitir_detalle_id=detalle.id
             )
-            messages.error(request, error)
+            if (
+                margen_detalle is not None
+                and margen_restante + margen_detalle >= detalle.venta.descuento
+            ):
+                with transaction.atomic():
+                    lote = form.cleaned_data["inventario_lote"]
+                    detalle = form.save(commit=False)
+                    detalle.producto = lote.producto
+                    detalle.save()
+                    detalle.salidas.all().delete()
+                    SalidaInventario.objects.create(
+                        detalle_venta=detalle,
+                        inventario_lote=lote,
+                        cantidad=detalle.cantidad,
+                    )
+                    persona_karen, _ = PersonaGanancia.objects.get_or_create(
+                        nombre="Karen"
+                    )
+                    DistribucionGanancia.objects.update_or_create(
+                        detalle_venta=detalle,
+                        persona=persona_karen,
+                        defaults={
+                            "venta": detalle.venta,
+                            "monto": form.cleaned_data.get("comision_karen") or 0,
+                        },
+                    )
+                messages.success(request, "Producto actualizado.")
+            elif margen_detalle is not None:
+                form.add_error(
+                    "precio_unitario_venta",
+                    "La venta completa quedaría con ganancia negativa.",
+                )
+        if form.errors:
+            messages.error(
+                request,
+                _primer_error_formulario(form, "Revisa los datos del producto."),
+            )
     return redirect(f"{reverse('negocio:ventas')}?abierta={detalle.venta_id}")

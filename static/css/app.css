@@ -601,6 +601,9 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
 }
 .sales-list { display: grid; gap: 12px; }
 .sale-card {
+  display: grid;
+  grid-template-columns: minmax(650px, 1.7fr) minmax(400px, 1fr);
+  align-items: stretch;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 15px;
@@ -609,10 +612,10 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
 }
 .sale-card-summary {
   display: grid;
-  grid-template-columns: 120px minmax(170px, 1.5fr) minmax(120px, .85fr) 115px 68px;
-  gap: 14px;
+  grid-template-columns: 100px minmax(145px, 1.5fr) minmax(115px, .9fr) 100px 132px;
+  gap: 10px;
   align-items: center;
-  padding: 13px 16px 8px;
+  padding: 11px 14px;
   cursor: pointer;
   outline: none;
 }
@@ -652,12 +655,27 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
 .sale-payment .payment-status { margin-top: 4px; }
 .sale-status { text-align: center; }
 .sale-status .status { justify-content: center; }
-.sale-actions { text-align: right; }
+.sale-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  text-align: right;
+}
+.sale-actions form { margin: 0; }
 .button.tiny { min-height: 30px; padding: 0 9px; font-size: 10px; }
+.button.close-sale {
+  border-color: #d7b36c;
+  background: #fff7e8;
+  color: #80540b;
+}
+.button.close-sale:hover { background: #f8e7c3; }
+.status.locked { background: #e9eceb; color: #53615b; }
 .sale-financials {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  margin: 0 16px 12px 47px;
+  align-self: center;
+  margin: 8px 12px 8px 0;
   border: 1px solid #e3e9e6;
   border-radius: 10px;
   background: #fafbfa;
@@ -681,6 +699,7 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
 .sale-financials .profit-cell { color: var(--green); }
 .sale-financials .profit-cell.negative { color: #b54135; }
 .inline-edit-panel {
+  grid-column: 1 / -1;
   margin: 0 16px 12px;
   padding: 12px;
   border: 1px solid #c7d8d0;
@@ -695,6 +714,7 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
 }
 .inline-edit-actions { align-items: center; }
 .sale-detail {
+  grid-column: 1 / -1;
   padding: 14px 16px 16px;
   border-top: 1px solid var(--line);
   background: #f7faf8;
@@ -721,6 +741,8 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
   margin: 0 0 11px;
 }
 .product-inline-form .lot-stock-hint { font-size: 9px; }
+.sale-card.closed { border-color: #c8cfcc; background: #fbfcfb; }
+.sale-card.closed .sale-card-summary { cursor: pointer; }
 .inline-sale-creator[hidden],
 .inline-edit-panel[hidden],
 .sale-detail[hidden] {
@@ -1113,6 +1135,11 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
   color: var(--green);
   font-size: 11px;
   font-weight: 700;
+}
+
+@media (max-width: 1100px) {
+  .sale-card { display: block; }
+  .sale-financials { margin: 0 16px 12px 47px; }
 }
 
 @media (max-width: 900px) {
