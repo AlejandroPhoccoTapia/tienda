@@ -139,6 +139,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const count = document.querySelector("#detail-count");
     const deletions = document.querySelector("#detail-deletions");
 
+    const updateLotLimit = (row) => {
+      const select = row.querySelector('select[name$="-inventario_lote"]');
+      const quantity = row.querySelector('input[name$="-cantidad"]');
+      const hint = row.querySelector(".lot-stock-hint");
+      const option = select?.selectedOptions[0];
+      const stock = Number(option?.dataset.stock);
+      if (option?.value && Number.isFinite(stock)) {
+        quantity.max = stock;
+        hint.textContent = `Costo del lote: S/ ${option.dataset.cost} · Máximo disponible: ${stock}`;
+      } else {
+        quantity.removeAttribute("max");
+        hint.textContent = "Selecciona un lote para ver el límite.";
+      }
+    };
+
     document.querySelector("#add-sale-line").addEventListener("click", () => {
       const index = Number(count.value);
       lines.insertAdjacentHTML(
@@ -146,6 +161,13 @@ document.addEventListener("DOMContentLoaded", () => {
         template.innerHTML.replaceAll("__D__", index)
       );
       count.value = index + 1;
+      updateLotLimit(lines.querySelector(`.sale-line[data-detail-index="${index}"]`));
+    });
+
+    lines.addEventListener("change", (event) => {
+      if (event.target.matches('select[name$="-inventario_lote"]')) {
+        updateLotLimit(event.target.closest(".sale-line"));
+      }
     });
 
     lines.addEventListener("click", (event) => {
@@ -159,5 +181,7 @@ document.addEventListener("DOMContentLoaded", () => {
       deletions.appendChild(input);
       row.remove();
     });
+
+    lines.querySelectorAll(".sale-line").forEach(updateLotLimit);
   }
 });

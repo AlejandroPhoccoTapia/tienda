@@ -1,4 +1,6 @@
 from django import forms
+from django.db.models import F, IntegerField, Sum, Value
+from django.db.models.functions import Coalesce
 
 from .models import (
     Cliente,
@@ -12,6 +14,46 @@ from .models import (
     TipoPago,
     Venta,
 )
+
+
+def lotes_con_stock():
+    return (
+        InventarioLote.objects.select_related(
+            "producto", "paquete", "paquete__pedido"
+        )
+        .annotate(
+            cantidad_usada=Coalesce(
+                Sum("salidas__cantidad"), Value(0), output_field=IntegerField()
+            )
+        )
+        .annotate(stock_disponible=F("cantidad_inicial") - F("cantidad_usada"))
+        .filter(stock_disponible__gt=0)
+        .order_by("producto__nombre", "paquete__pedido__fecha", "id")
+    )
+
+
+class LoteSelect(forms.Select):
+    def create_option(
+        self, name, value, label, selected, index, subindex=None, attrs=None
+    ):
+        option = super().create_option(
+            name, value, label, selected, index, subindex=subindex, attrs=attrs
+        )
+        instancia = getattr(value, "instance", None)
+        if instancia is not None:
+            option["attrs"]["data-stock"] = instancia.stock_disponible
+            option["attrs"]["data-cost"] = f"{instancia.costo_unitario_soles:.2f}"
+        return option
+
+
+class LoteChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, lote):
+        codigo = lote.paquete.codigo_seguimiento or f"Paquete #{lote.paquete_id}"
+        return (
+            f"{lote.producto.nombre} · Lote #{lote.id} ({codigo}) · "
+            f"Costo S/ {lote.costo_unitario_soles:.2f} · "
+            f"Disponible: {lote.stock_disponible}"
+        )
 
 
 class DateTimeLocalInput(forms.DateTimeInput):
@@ -170,11 +212,17 @@ class VentaForm(forms.ModelForm):
 
 
 class DetalleVentaForm(forms.ModelForm):
+    inventario_lote = LoteChoiceField(
+        queryset=InventarioLote.objects.none(),
+        label="Producto y lote",
+        empty_label="Selecciona un lote con stock",
+        widget=LoteSelect,
+    )
+
     class Meta:
         model = DetalleVenta
-        fields = ["producto", "cantidad", "precio_unitario_venta"]
+        fields = ["cantidad", "precio_unitario_venta"]
         labels = {
-            "producto": "Producto",
             "cantidad": "Cantidad",
             "precio_unitario_venta": "Precio unitario de venta S/",
         }
@@ -184,6 +232,21 @@ class DetalleVentaForm(forms.ModelForm):
                 attrs={"min": "0", "step": "0.01", "placeholder": "0.00"}
             ),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["inventario_lote"].queryset = lotes_con_stock()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        lote = cleaned_data.get("inventario_lote")
+        cantidad = cleaned_data.get("cantidad")
+        if lote and cantidad and cantidad > lote.stock_disponible:
+            self.add_error(
+                "cantidad",
+                f"Solo hay {lote.stock_disponible} unidades disponibles en este lote.",
+            )
+        return cleaned_data
 
 
 class MarcaForm(forms.ModelForm):

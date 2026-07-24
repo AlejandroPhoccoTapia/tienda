@@ -28,6 +28,7 @@ from .forms import (
     TipoProductoForm,
     TipoPagoForm,
     VentaForm,
+    lotes_con_stock,
 )
 from .models import (
     Cliente,
@@ -554,39 +555,33 @@ def venta_crear(request):
         if not detalles:
             form.add_error(None, "La venta debe contener al menos un producto.")
 
-        cantidades_por_producto = {}
+        cantidades_por_lote = {}
+        formularios_por_lote = {}
         for detalle_fila in detalles:
             detalle_form = detalle_fila["form"]
             valido_detalle = detalle_form.is_valid()
             valido = valido and valido_detalle
             if valido_detalle:
-                producto = detalle_form.cleaned_data["producto"]
-                cantidades_por_producto[producto.id] = (
-                    cantidades_por_producto.get(producto.id, 0)
+                lote = detalle_form.cleaned_data["inventario_lote"]
+                cantidades_por_lote[lote.id] = (
+                    cantidades_por_lote.get(lote.id, 0)
                     + detalle_form.cleaned_data["cantidad"]
                 )
+                formularios_por_lote.setdefault(lote.id, []).append(detalle_form)
 
         if valido:
-            for producto_id, cantidad_solicitada in cantidades_por_producto.items():
-                lotes = InventarioLote.objects.filter(
-                    producto_id=producto_id
-                ).annotate(
-                    cantidad_usada=Coalesce(
-                        Sum("salidas__cantidad"),
-                        Value(0),
-                        output_field=IntegerField(),
-                    )
-                )
-                disponible = sum(
-                    lote.cantidad_inicial - lote.cantidad_usada for lote in lotes
-                )
+            lotes = {lote.id: lote for lote in lotes_con_stock()}
+            for lote_id, cantidad_solicitada in cantidades_por_lote.items():
+                lote = lotes.get(lote_id)
+                disponible = lote.stock_disponible if lote else 0
                 if cantidad_solicitada > disponible:
-                    producto = Producto.objects.get(pk=producto_id)
-                    form.add_error(
-                        None,
-                        f"Stock insuficiente para {producto.nombre}: "
-                        f"solicitaste {cantidad_solicitada} y hay {disponible}.",
-                    )
+                    for detalle_form in formularios_por_lote[lote_id]:
+                        detalle_form.add_error(
+                            "cantidad",
+                            f"Entre todas las líneas solicitaste "
+                            f"{cantidad_solicitada}, pero este lote tiene "
+                            f"{disponible} disponibles.",
+                        )
                     valido = False
 
         if valido:
@@ -594,37 +589,16 @@ def venta_crear(request):
                 venta = form.save()
                 for detalle_fila in detalles:
                     detalle_form = detalle_fila["form"]
+                    lote = detalle_form.cleaned_data["inventario_lote"]
                     detalle = detalle_form.save(commit=False)
                     detalle.venta = venta
+                    detalle.producto = lote.producto
                     detalle.save()
-
-                    restante = detalle.cantidad
-                    lotes = (
-                        InventarioLote.objects.select_for_update()
-                        .filter(producto=detalle.producto)
-                        .annotate(
-                            cantidad_usada=Coalesce(
-                                Sum("salidas__cantidad"),
-                                Value(0),
-                                output_field=IntegerField(),
-                            )
-                        )
-                        .select_related("paquete__pedido")
-                        .order_by("paquete__pedido__fecha", "id")
+                    SalidaInventario.objects.create(
+                        detalle_venta=detalle,
+                        inventario_lote=lote,
+                        cantidad=detalle.cantidad,
                     )
-                    for lote in lotes:
-                        disponible = lote.cantidad_inicial - lote.cantidad_usada
-                        if disponible <= 0:
-                            continue
-                        salida = min(restante, disponible)
-                        SalidaInventario.objects.create(
-                            detalle_venta=detalle,
-                            inventario_lote=lote,
-                            cantidad=salida,
-                        )
-                        restante -= salida
-                        if restante == 0:
-                            break
 
             messages.success(request, f"Venta #{venta.id} registrada correctamente.")
             return redirect("negocio:ventas")
@@ -636,6 +610,6 @@ def venta_crear(request):
             "form": form,
             "detalles": detalles,
             "total_detalles": total_detalles,
-            "productos_disponibles": Producto.objects.all(),
+            "lotes_disponibles": lotes_con_stock(),
         },
     )

@@ -285,7 +285,7 @@ class VistasNegocioTests(TestCase):
                 "pagado": "on",
                 "estado_entrega": "En camino",
                 "detalle_count": "1",
-                "detalle-0-producto": self.producto_a.id,
+                "detalle-0-inventario_lote": self.lote.id,
                 "detalle-0-cantidad": "2",
                 "detalle-0-precio_unitario_venta": "40.00",
             },
@@ -307,14 +307,46 @@ class VistasNegocioTests(TestCase):
                 "descuento": "0",
                 "estado_entrega": "Pendiente",
                 "detalle_count": "1",
-                "detalle-0-producto": self.producto_a.id,
+                "detalle-0-inventario_lote": self.lote.id,
                 "detalle-0-cantidad": "99",
                 "detalle-0-precio_unitario_venta": "40.00",
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Stock insuficiente")
+        self.assertContains(response, "Solo hay 7 unidades disponibles")
         self.assertFalse(Venta.objects.filter(direccion_entrega="Venta imposible").exists())
+
+    def test_selector_de_venta_muestra_lote_costo_y_stock(self):
+        response = self.client.get(reverse("negocio:venta_crear"))
+        self.assertContains(response, "Producto A")
+        self.assertContains(response, f"Lote #{self.lote.id}")
+        self.assertContains(response, "Costo S/ 20.00")
+        self.assertContains(response, "Disponible: 7")
+
+    def test_no_permite_superar_stock_repartiendo_el_mismo_lote(self):
+        response = self.client.post(
+            reverse("negocio:venta_crear"),
+            {
+                "fecha": "2026-07-24T16:00",
+                "cliente": self.cliente.id,
+                "tipo_pago": self.yape.id,
+                "direccion_entrega": "Venta doble imposible",
+                "descuento": "0",
+                "estado_entrega": "Pendiente",
+                "detalle_count": "2",
+                "detalle-0-inventario_lote": self.lote.id,
+                "detalle-0-cantidad": "4",
+                "detalle-0-precio_unitario_venta": "40.00",
+                "detalle-1-inventario_lote": self.lote.id,
+                "detalle-1-cantidad": "4",
+                "detalle-1-precio_unitario_venta": "40.00",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "solicitaste 8")
+        self.assertFalse(
+            Venta.objects.filter(direccion_entrega="Venta doble imposible").exists()
+        )
 
     def test_crea_cliente_y_metodo_pago_desde_catalogos(self):
         cliente_response = self.client.post(
