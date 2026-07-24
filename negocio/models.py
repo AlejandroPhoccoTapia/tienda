@@ -211,6 +211,13 @@ class DistribucionGanancia(models.Model):
     venta = models.ForeignKey(
         Venta, on_delete=models.CASCADE, related_name="distribuciones"
     )
+    detalle_venta = models.ForeignKey(
+        DetalleVenta,
+        on_delete=models.CASCADE,
+        related_name="distribuciones_ganancia",
+        null=True,
+        blank=True,
+    )
     persona = models.ForeignKey(
         PersonaGanancia, on_delete=models.PROTECT, related_name="distribuciones"
     )
@@ -221,7 +228,8 @@ class DistribucionGanancia(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["venta", "persona"], name="distribucion_venta_persona_unica"
+                fields=["detalle_venta", "persona"],
+                name="distribucion_detalle_persona_unica",
             )
         ]
         ordering = ["persona__nombre"]

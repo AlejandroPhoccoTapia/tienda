@@ -67,6 +67,7 @@
     <label class="lot-select-field"><span>Producto y lote</span><select name="detalle-__D__-inventario_lote" required><option value="">Selecciona un lote con stock</option>{% for lote in lotes_disponibles %}<option value="{{ lote.id }}" data-stock="{{ lote.stock_disponible }}" data-cost="{{ lote.costo_unitario_soles|floatformat:2 }}">{{ lote.producto.nombre }} · Lote #{{ lote.id }} ({{ lote.paquete.codigo_seguimiento|default:"Sin seguimiento" }}) · Costo S/ {{ lote.costo_unitario_soles|floatformat:2 }} · Disponible: {{ lote.stock_disponible }}</option>{% endfor %}</select><small class="lot-stock-hint">Selecciona un lote para ver el límite.</small></label>
     <label><span>Cantidad</span><input type="number" name="detalle-__D__-cantidad" min="1" step="1" required></label>
     <label><span>Precio unitario de venta S/</span><input type="number" name="detalle-__D__-precio_unitario_venta" min="0" step="0.01" placeholder="0.00" required></label>
+    <label><span>Comisión de Karen S/</span><input type="number" name="detalle-__D__-comision_karen" min="0" step="0.01" value="0"></label>
     <button class="remove-line" type="button" aria-label="Quitar producto">×</button>
   </div>
 </template>

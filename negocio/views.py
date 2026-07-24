@@ -1,3 +1,5 @@
+from decimal import Decimal, ROUND_HALF_UP
+
 from django.db.models import (
     Count,
     DecimalField,
@@ -5,6 +7,7 @@ from django.db.models import (
     F,
     IntegerField,
     OuterRef,
+    Prefetch,
     Q,
     Subquery,
     Sum,
@@ -516,8 +519,47 @@ def ventas(request):
         .values("venta_id")
         .annotate(total=Sum("monto"))
     )
+    costo_por_detalle = (
+        SalidaInventario.objects.filter(detalle_venta_id=OuterRef("pk"))
+        .values("detalle_venta_id")
+        .annotate(
+            total=Sum(
+                ExpressionWrapper(
+                    F("cantidad") * F("inventario_lote__costo_unitario_soles"),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                )
+            )
+        )
+    )
+    karen_por_detalle = (
+        DistribucionGanancia.objects.filter(
+            detalle_venta_id=OuterRef("pk"), persona__nombre__iexact="Karen"
+        )
+        .values("detalle_venta_id")
+        .annotate(total=Sum("monto"))
+    )
+    detalles_calculados = (
+        DetalleVenta.objects.select_related("producto")
+        .annotate(
+            costo_total=Coalesce(
+                Subquery(costo_por_detalle.values("total")),
+                Value(0),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+            comision_karen=Coalesce(
+                Subquery(karen_por_detalle.values("total")),
+                Value(0),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+        )
+        .order_by("id")
+    )
 
-    items = Venta.objects.select_related("cliente", "tipo_pago").annotate(
+    items = Venta.objects.select_related("cliente", "tipo_pago").prefetch_related(
+        Prefetch(
+            "detalles", queryset=detalles_calculados, to_attr="detalles_calculados"
+        )
+    ).annotate(
         unidades=Coalesce(
             Subquery(estadisticas_detalle.values("unidades_total")),
             Value(0),
@@ -561,6 +603,46 @@ def ventas(request):
 
     items = items.order_by("fecha" if orden == "antigua" else "-fecha")
 
+    centimo = Decimal("0.01")
+    for venta in items:
+        descuento_restante = venta.descuento
+        detalles = venta.detalles_calculados
+        for indice, detalle in enumerate(detalles):
+            detalle.precio_venta_total = (
+                Decimal(detalle.cantidad) * detalle.precio_unitario_venta
+            )
+            if indice == len(detalles) - 1:
+                detalle.descuento_asignado = descuento_restante
+            elif venta.subtotal:
+                detalle.descuento_asignado = (
+                    venta.descuento
+                    * detalle.precio_venta_total
+                    / venta.subtotal
+                ).quantize(centimo, rounding=ROUND_HALF_UP)
+                descuento_restante -= detalle.descuento_asignado
+            else:
+                detalle.descuento_asignado = Decimal("0")
+            detalle.mi_ganancia = (
+                detalle.precio_venta_total
+                - detalle.descuento_asignado
+                - detalle.costo_total
+                - detalle.comision_karen
+            )
+    resumen = {
+        "costo_total": sum(
+            (venta.costo_total for venta in items), Decimal("0")
+        ),
+        "precio_venta_total": sum(
+            (venta.total for venta in items), Decimal("0")
+        ),
+        "comision_karen_total": sum(
+            (venta.monto_karen for venta in items), Decimal("0")
+        ),
+        "mi_ganancia_total": sum(
+            (venta.mi_ganancia for venta in items), Decimal("0")
+        ),
+    }
+
     return render(
         request,
         "negocio/ventas.html",
@@ -570,6 +652,7 @@ def ventas(request):
             "mes_seleccionado": mes,
             "pago_seleccionado": tipo_pago_id,
             "orden_seleccionado": orden,
+            "resumen": resumen,
         },
     )
 
@@ -645,11 +728,6 @@ def venta_crear(request):
                 persona_karen, _ = PersonaGanancia.objects.get_or_create(
                     nombre="Karen"
                 )
-                DistribucionGanancia.objects.create(
-                    venta=venta,
-                    persona=persona_karen,
-                    monto=form.cleaned_data.get("monto_karen") or 0,
-                )
                 for detalle_fila in detalles:
                     detalle_form = detalle_fila["form"]
                     lote = detalle_form.cleaned_data["inventario_lote"]
@@ -661,6 +739,12 @@ def venta_crear(request):
                         detalle_venta=detalle,
                         inventario_lote=lote,
                         cantidad=detalle.cantidad,
+                    )
+                    DistribucionGanancia.objects.create(
+                        venta=venta,
+                        detalle_venta=detalle,
+                        persona=persona_karen,
+                        monto=detalle_form.cleaned_data.get("comision_karen") or 0,
                     )
 
             messages.success(request, f"Venta #{venta.id} registrada correctamente.")

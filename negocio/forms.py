@@ -169,16 +169,6 @@ class LotePedidoForm(forms.ModelForm):
 
 
 class VentaForm(forms.ModelForm):
-    monto_karen = forms.DecimalField(
-        label="Karen (S/)",
-        min_value=0,
-        max_digits=12,
-        decimal_places=2,
-        required=False,
-        initial=0,
-        widget=forms.NumberInput(attrs={"min": "0", "step": "0.01"}),
-    )
-
     class Meta:
         model = Venta
         fields = [
@@ -224,7 +214,6 @@ class VentaForm(forms.ModelForm):
                 "tipo_pago",
                 "direccion_entrega",
                 "descuento",
-                "monto_karen",
                 "pagado",
                 "estado_entrega",
             ]
@@ -237,6 +226,15 @@ class DetalleVentaForm(forms.ModelForm):
         label="Producto y lote",
         empty_label="Selecciona un lote con stock",
         widget=LoteSelect,
+    )
+    comision_karen = forms.DecimalField(
+        label="Comisión de Karen S/",
+        min_value=0,
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        initial=0,
+        widget=forms.NumberInput(attrs={"min": "0", "step": "0.01"}),
     )
 
     class Meta:
@@ -256,6 +254,14 @@ class DetalleVentaForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["inventario_lote"].queryset = lotes_con_stock()
+        self.order_fields(
+            [
+                "inventario_lote",
+                "cantidad",
+                "precio_unitario_venta",
+                "comision_karen",
+            ]
+        )
 
     def clean(self):
         cleaned_data = super().clean()

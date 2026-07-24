@@ -40,6 +40,25 @@
   {% endif %}
 </form>
 
+<section class="sales-summary" aria-label="Totales de las ventas filtradas">
+  <article>
+    <span>Costo total</span>
+    <strong>S/ {{ resumen.costo_total|floatformat:2 }}</strong>
+  </article>
+  <article>
+    <span>Precio de venta total</span>
+    <strong>S/ {{ resumen.precio_venta_total|floatformat:2 }}</strong>
+  </article>
+  <article>
+    <span>Comisión de Karen</span>
+    <strong>S/ {{ resumen.comision_karen_total|floatformat:2 }}</strong>
+  </article>
+  <article class="profit-summary {% if resumen.mi_ganancia_total < 0 %}negative{% endif %}">
+    <span>Mi ganancia total</span>
+    <strong>S/ {{ resumen.mi_ganancia_total|floatformat:2 }}</strong>
+  </article>
+</section>
+
 {% if ventas %}
   <section class="table-card">
     <div class="table-wrap">
@@ -60,8 +79,8 @@
         </thead>
         <tbody>
           {% for venta in ventas %}
-            <tr>
-              <td><strong>#{{ venta.id }}</strong></td>
+            <tr class="sale-summary-row" tabindex="0" role="button" aria-expanded="false" aria-controls="sale-detail-{{ venta.id }}" data-sale-toggle="{{ venta.id }}">
+              <td><span class="sale-chevron">›</span><strong>#{{ venta.id }}</strong></td>
               <td>{{ venta.fecha|date:"d M Y" }}<small>{{ venta.fecha|date:"H:i" }}</small></td>
               <td>
                 <div class="client-line">
@@ -86,6 +105,36 @@
               <td><strong>S/ {{ venta.total|floatformat:2 }}</strong><small>Desc. S/ {{ venta.descuento|floatformat:2 }}</small></td>
               <td><strong>S/ {{ venta.monto_karen|floatformat:2 }}</strong><small>Entrega</small></td>
               <td class="profit-cell {% if venta.mi_ganancia < 0 %}negative{% endif %}"><strong>S/ {{ venta.mi_ganancia|floatformat:2 }}</strong><small>Venta − costo − Karen</small></td>
+            </tr>
+            <tr class="sale-detail-row" id="sale-detail-{{ venta.id }}" hidden>
+              <td colspan="10">
+                <div class="sale-products">
+                  <div class="sale-products-heading">
+                    <strong>Producto</strong>
+                    <strong>Precio de venta</strong>
+                    <strong>Costo</strong>
+                    <strong>Comisión Karen</strong>
+                    <strong>Mi ganancia</strong>
+                  </div>
+                  {% for detalle in venta.detalles_calculados %}
+                    <div class="sale-product-row">
+                      <div>
+                        <strong>{{ detalle.producto.nombre }}</strong>
+                        <small>{{ detalle.cantidad }} × S/ {{ detalle.precio_unitario_venta|floatformat:2 }}</small>
+                      </div>
+                      <div>
+                        <strong>S/ {{ detalle.precio_venta_total|floatformat:2 }}</strong>
+                        {% if detalle.descuento_asignado %}<small>Desc. asignado S/ {{ detalle.descuento_asignado|floatformat:2 }}</small>{% endif %}
+                      </div>
+                      <div><strong>S/ {{ detalle.costo_total|floatformat:2 }}</strong><small>Costo del lote</small></div>
+                      <div><strong>S/ {{ detalle.comision_karen|floatformat:2 }}</strong><small>Por este producto</small></div>
+                      <div class="product-profit {% if detalle.mi_ganancia < 0 %}negative{% endif %}"><strong>S/ {{ detalle.mi_ganancia|floatformat:2 }}</strong><small>Venta − desc. − costo − Karen</small></div>
+                    </div>
+                  {% empty %}
+                    <p class="table-empty">Esta venta no tiene productos registrados.</p>
+                  {% endfor %}
+                </div>
+              </td>
             </tr>
           {% endfor %}
         </tbody>

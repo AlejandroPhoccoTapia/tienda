@@ -1,4 +1,24 @@
 document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".sale-summary-row").forEach((row) => {
+    const toggle = () => {
+      const detail = document.querySelector(`#sale-detail-${row.dataset.saleToggle}`);
+      const willOpen = detail.hidden;
+      detail.hidden = !willOpen;
+      row.setAttribute("aria-expanded", String(willOpen));
+      row.classList.toggle("expanded", willOpen);
+    };
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("button, a")) return;
+      toggle();
+    });
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        toggle();
+      }
+    });
+  });
+
   document.querySelectorAll(".copy-phone").forEach((button) => {
     button.addEventListener("click", async () => {
       const phone = button.dataset.phone;

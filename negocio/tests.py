@@ -298,13 +298,13 @@ class VistasNegocioTests(TestCase):
                 "tipo_pago": self.yape.id,
                 "direccion_entrega": "Miraflores",
                 "descuento": "5.00",
-                "monto_karen": "10.00",
                 "pagado": "on",
                 "estado_entrega": "No entregado",
                 "detalle_count": "1",
                 "detalle-0-inventario_lote": self.lote.id,
                 "detalle-0-cantidad": "2",
                 "detalle-0-precio_unitario_venta": "40.00",
+                "detalle-0-comision_karen": "10.00",
             },
         )
         self.assertRedirects(response, reverse("negocio:ventas"))
@@ -312,19 +312,37 @@ class VistasNegocioTests(TestCase):
         detalle = venta.detalles.get()
         self.assertEqual(detalle.cantidad, 2)
         self.assertEqual(detalle.salidas.aggregate(total=Sum("cantidad"))["total"], 2)
-        self.assertEqual(
-            DistribucionGanancia.objects.get(
-                venta=venta, persona__nombre="Karen"
-            ).monto,
-            Decimal("10.00"),
+        distribucion = DistribucionGanancia.objects.get(
+            venta=venta, persona__nombre="Karen"
         )
-        venta_calculada = self.client.get(reverse("negocio:ventas")).context[
-            "ventas"
-        ].get(pk=venta.id)
+        self.assertEqual(distribucion.monto, Decimal("10.00"))
+        self.assertEqual(distribucion.detalle_venta, detalle)
+        listado = self.client.get(reverse("negocio:ventas"))
+        venta_calculada = next(
+            item for item in listado.context["ventas"] if item.pk == venta.id
+        )
         self.assertEqual(venta_calculada.costo_total, Decimal("40"))
         self.assertEqual(venta_calculada.total, Decimal("75"))
         self.assertEqual(venta_calculada.monto_karen, Decimal("10"))
         self.assertEqual(venta_calculada.mi_ganancia, Decimal("25"))
+        detalle_calculado = venta_calculada.detalles_calculados[0]
+        self.assertEqual(detalle_calculado.precio_venta_total, Decimal("80"))
+        self.assertEqual(detalle_calculado.costo_total, Decimal("40"))
+        self.assertEqual(detalle_calculado.comision_karen, Decimal("10"))
+        self.assertEqual(detalle_calculado.descuento_asignado, Decimal("5"))
+        self.assertEqual(detalle_calculado.mi_ganancia, Decimal("25"))
+        self.assertEqual(listado.context["resumen"]["costo_total"], Decimal("100"))
+        self.assertEqual(
+            listado.context["resumen"]["precio_venta_total"], Decimal("180")
+        )
+        self.assertEqual(
+            listado.context["resumen"]["comision_karen_total"], Decimal("10")
+        )
+        self.assertEqual(
+            listado.context["resumen"]["mi_ganancia_total"], Decimal("70")
+        )
+        self.assertContains(listado, "Comisión Karen")
+        self.assertContains(listado, "Mi ganancia total")
 
     def test_no_registra_venta_sin_stock_suficiente(self):
         response = self.client.post(
