@@ -18,6 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .forms import (
+    ClienteForm,
     DetalleVentaForm,
     LotePedidoForm,
     MarcaForm,
@@ -25,9 +26,11 @@ from .forms import (
     PedidoForm,
     ProductoForm,
     TipoProductoForm,
+    TipoPagoForm,
     VentaForm,
 )
 from .models import (
+    Cliente,
     DetalleVenta,
     InventarioLote,
     Marca,
@@ -296,6 +299,8 @@ def pedido_detalle(request, pedido_id):
 def catalogos(request):
     marca_form = MarcaForm(prefix="marca")
     tipo_form = TipoProductoForm(prefix="tipo")
+    cliente_form = ClienteForm(prefix="cliente")
+    pago_form = TipoPagoForm(prefix="pago")
 
     if request.method == "POST":
         formulario = request.POST.get("formulario")
@@ -311,6 +316,20 @@ def catalogos(request):
                 tipo = tipo_form.save()
                 messages.success(request, f"Tipo “{tipo.nombre}” agregado.")
                 return redirect("negocio:catalogos")
+        elif formulario == "cliente":
+            cliente_form = ClienteForm(request.POST, prefix="cliente")
+            if cliente_form.is_valid():
+                cliente = cliente_form.save()
+                messages.success(request, f"Cliente “{cliente.nombre}” agregado.")
+                return redirect("negocio:catalogos")
+        elif formulario == "pago":
+            pago_form = TipoPagoForm(request.POST, prefix="pago")
+            if pago_form.is_valid():
+                pago = pago_form.save()
+                messages.success(
+                    request, f"Método de pago “{pago.nombre}” agregado."
+                )
+                return redirect("negocio:catalogos")
 
     return render(
         request,
@@ -318,8 +337,12 @@ def catalogos(request):
         {
             "marca_form": marca_form,
             "tipo_form": tipo_form,
+            "cliente_form": cliente_form,
+            "pago_form": pago_form,
             "marcas": Marca.objects.annotate(total_productos=Count("productos")),
             "tipos": TipoProducto.objects.annotate(total_productos=Count("productos")),
+            "clientes": Cliente.objects.annotate(total_ventas=Count("ventas")),
+            "pagos": TipoPago.objects.annotate(total_ventas=Count("ventas")),
         },
     )
 
@@ -359,6 +382,88 @@ def tipo_eliminar(request, tipo_id):
             "titulo": "Eliminar tipo de producto",
             "nombre": tipo.nombre,
             "descripcion": "Los productos existentes se conservarán, pero quedarán sin tipo.",
+            "cancel_url": "negocio:catalogos",
+        },
+    )
+
+
+def cliente_editar(request, cliente_id):
+    cliente = get_object_or_404(Cliente, pk=cliente_id)
+    form = ClienteForm(request.POST or None, instance=cliente)
+    if request.method == "POST" and form.is_valid():
+        cliente = form.save()
+        messages.success(request, f"Cliente “{cliente.nombre}” actualizado.")
+        return redirect("negocio:catalogos")
+    return render(
+        request,
+        "negocio/catalogo_editar.html",
+        {
+            "form": form,
+            "titulo": "Editar cliente",
+            "descripcion": "Actualiza el nombre o teléfono del cliente.",
+        },
+    )
+
+
+def cliente_eliminar(request, cliente_id):
+    cliente = get_object_or_404(Cliente, pk=cliente_id)
+    if request.method == "POST":
+        nombre = cliente.nombre
+        cliente.delete()
+        messages.success(request, f"Cliente “{nombre}” eliminado.")
+        return redirect("negocio:catalogos")
+    return render(
+        request,
+        "negocio/confirmar_eliminar.html",
+        {
+            "titulo": "Eliminar cliente",
+            "nombre": cliente.nombre,
+            "descripcion": "Las ventas se conservarán, pero quedarán sin cliente asociado.",
+            "cancel_url": "negocio:catalogos",
+        },
+    )
+
+
+def pago_editar(request, pago_id):
+    pago = get_object_or_404(TipoPago, pk=pago_id)
+    form = TipoPagoForm(request.POST or None, instance=pago)
+    if request.method == "POST" and form.is_valid():
+        pago = form.save()
+        messages.success(
+            request, f"Método de pago “{pago.nombre}” actualizado."
+        )
+        return redirect("negocio:catalogos")
+    return render(
+        request,
+        "negocio/catalogo_editar.html",
+        {
+            "form": form,
+            "titulo": "Editar método de pago",
+            "descripcion": "Cambia el nombre que aparecerá en las ventas.",
+        },
+    )
+
+
+def pago_eliminar(request, pago_id):
+    pago = get_object_or_404(TipoPago, pk=pago_id)
+    if request.method == "POST":
+        nombre = pago.nombre
+        try:
+            pago.delete()
+            messages.success(request, f"Método de pago “{nombre}” eliminado.")
+        except ProtectedError:
+            messages.error(
+                request,
+                f"No se puede eliminar “{nombre}” porque ya está usado en ventas.",
+            )
+        return redirect("negocio:catalogos")
+    return render(
+        request,
+        "negocio/confirmar_eliminar.html",
+        {
+            "titulo": "Eliminar método de pago",
+            "nombre": pago.nombre,
+            "descripcion": "Solo se puede eliminar si no está utilizado en ninguna venta.",
             "cancel_url": "negocio:catalogos",
         },
     )

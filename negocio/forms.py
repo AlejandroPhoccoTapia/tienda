@@ -1,6 +1,7 @@
 from django import forms
 
 from .models import (
+    Cliente,
     DetalleVenta,
     InventarioLote,
     Marca,
@@ -8,6 +9,7 @@ from .models import (
     Pedido,
     Producto,
     TipoProducto,
+    TipoPago,
     Venta,
 )
 
@@ -201,4 +203,25 @@ class TipoProductoForm(forms.ModelForm):
         labels = {"nombre": "Nombre del tipo"}
         widgets = {
             "nombre": forms.TextInput(attrs={"placeholder": "Ej. Perfumería"})
+        }
+
+
+class ClienteForm(forms.ModelForm):
+    class Meta:
+        model = Cliente
+        fields = ["nombre", "telefono"]
+        labels = {"nombre": "Nombre del cliente", "telefono": "Teléfono"}
+        widgets = {
+            "nombre": forms.TextInput(attrs={"placeholder": "Ej. Ana Castillo"}),
+            "telefono": forms.TextInput(attrs={"placeholder": "Ej. 999 123 456"}),
+        }
+
+
+class TipoPagoForm(forms.ModelForm):
+    class Meta:
+        model = TipoPago
+        fields = ["nombre"]
+        labels = {"nombre": "Nombre del método"}
+        widgets = {
+            "nombre": forms.TextInput(attrs={"placeholder": "Ej. Plin"})
         }

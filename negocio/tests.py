@@ -315,3 +315,62 @@ class VistasNegocioTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Stock insuficiente")
         self.assertFalse(Venta.objects.filter(direccion_entrega="Venta imposible").exists())
+
+    def test_crea_cliente_y_metodo_pago_desde_catalogos(self):
+        cliente_response = self.client.post(
+            reverse("negocio:catalogos"),
+            {
+                "formulario": "cliente",
+                "cliente-nombre": "Cliente nuevo",
+                "cliente-telefono": "900 111 222",
+            },
+        )
+        pago_response = self.client.post(
+            reverse("negocio:catalogos"),
+            {"formulario": "pago", "pago-nombre": "Plin"},
+        )
+        self.assertRedirects(cliente_response, reverse("negocio:catalogos"))
+        self.assertRedirects(pago_response, reverse("negocio:catalogos"))
+        self.assertTrue(Cliente.objects.filter(nombre="Cliente nuevo").exists())
+        self.assertTrue(TipoPago.objects.filter(nombre="Plin").exists())
+
+    def test_edita_cliente_y_metodo_pago(self):
+        cliente_response = self.client.post(
+            reverse("negocio:cliente_editar", args=[self.cliente.id]),
+            {"nombre": "Cliente actualizado", "telefono": "955 000 111"},
+        )
+        pago = TipoPago.objects.create(nombre="Tarjeta")
+        pago_response = self.client.post(
+            reverse("negocio:pago_editar", args=[pago.id]),
+            {"nombre": "Tarjeta POS"},
+        )
+        self.assertRedirects(cliente_response, reverse("negocio:catalogos"))
+        self.assertRedirects(pago_response, reverse("negocio:catalogos"))
+        self.cliente.refresh_from_db()
+        pago.refresh_from_db()
+        self.assertEqual(self.cliente.nombre, "Cliente actualizado")
+        self.assertEqual(pago.nombre, "Tarjeta POS")
+
+    def test_elimina_cliente_y_conserva_sus_ventas(self):
+        venta_id = self.venta_julio.id
+        response = self.client.post(
+            reverse("negocio:cliente_eliminar", args=[self.cliente.id])
+        )
+        self.assertRedirects(response, reverse("negocio:catalogos"))
+        self.assertFalse(Cliente.objects.filter(pk=self.cliente.id).exists())
+        self.assertIsNone(Venta.objects.get(pk=venta_id).cliente)
+
+    def test_protege_metodo_pago_utilizado(self):
+        response = self.client.post(
+            reverse("negocio:pago_eliminar", args=[self.yape.id])
+        )
+        self.assertRedirects(response, reverse("negocio:catalogos"))
+        self.assertTrue(TipoPago.objects.filter(pk=self.yape.id).exists())
+
+    def test_elimina_metodo_pago_sin_ventas(self):
+        pago = TipoPago.objects.create(nombre="Cheque")
+        response = self.client.post(
+            reverse("negocio:pago_eliminar", args=[pago.id])
+        )
+        self.assertRedirects(response, reverse("negocio:catalogos"))
+        self.assertFalse(TipoPago.objects.filter(pk=pago.id).exists())

@@ -33,4 +33,24 @@ urlpatterns = [
         views.tipo_eliminar,
         name="tipo_eliminar",
     ),
+    path(
+        "catalogos/clientes/<int:cliente_id>/editar/",
+        views.cliente_editar,
+        name="cliente_editar",
+    ),
+    path(
+        "catalogos/clientes/<int:cliente_id>/eliminar/",
+        views.cliente_eliminar,
+        name="cliente_eliminar",
+    ),
+    path(
+        "catalogos/pagos/<int:pago_id>/editar/",
+        views.pago_editar,
+        name="pago_editar",
+    ),
+    path(
+        "catalogos/pagos/<int:pago_id>/eliminar/",
+        views.pago_eliminar,
+        name="pago_eliminar",
+    ),
 ]

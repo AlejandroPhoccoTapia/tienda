@@ -1,11 +1,11 @@
 {% extends "negocio/base.html" %}
-{% block title %}Marcas y tipos{% endblock %}
+{% block title %}Catálogos{% endblock %}
 {% block content %}
 <section class="page-heading">
   <div>
     <p class="eyebrow">Configuración</p>
-    <h1>Marcas y tipos</h1>
-    <p class="subtitle">Administra las opciones que utilizas para clasificar tus productos.</p>
+    <h1>Catálogos del negocio</h1>
+    <p class="subtitle">Administra productos, clientes y opciones utilizadas en tus ventas.</p>
   </div>
 </section>
 
@@ -72,6 +72,84 @@
         </div>
       {% empty %}
         <p class="catalog-empty">Todavía no hay tipos.</p>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="catalog-card">
+    <header>
+      <div>
+        <p class="eyebrow">Ventas</p>
+        <h2>Clientes</h2>
+      </div>
+      <span class="count-pill">{{ clientes|length }}</span>
+    </header>
+    <form class="inline-create" method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="formulario" value="cliente">
+      <div class="inline-fields">
+        <label>
+          <span>{{ cliente_form.nombre.label }}</span>
+          {{ cliente_form.nombre }}
+          {% for error in cliente_form.nombre.errors %}<em>{{ error }}</em>{% endfor %}
+        </label>
+        <label>
+          <span>{{ cliente_form.telefono.label }}</span>
+          {{ cliente_form.telefono }}
+          {% for error in cliente_form.telefono.errors %}<em>{{ error }}</em>{% endfor %}
+        </label>
+      </div>
+      <button class="button primary" type="submit">Agregar cliente</button>
+    </form>
+    <div class="catalog-list">
+      {% for cliente in clientes %}
+        <div>
+          <div class="catalog-primary">
+            <strong>{{ cliente.nombre }}</strong>
+            <small>{{ cliente.telefono|default:"Sin teléfono" }}</small>
+          </div>
+          <div class="catalog-actions">
+            <span>{{ cliente.total_ventas }} venta{{ cliente.total_ventas|pluralize }}</span>
+            <a class="edit-link" href="{% url 'negocio:cliente_editar' cliente.id %}">Editar</a>
+            <a class="danger-link" href="{% url 'negocio:cliente_eliminar' cliente.id %}">Eliminar</a>
+          </div>
+        </div>
+      {% empty %}
+        <p class="catalog-empty">Todavía no hay clientes.</p>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="catalog-card">
+    <header>
+      <div>
+        <p class="eyebrow">Ventas</p>
+        <h2>Métodos de pago</h2>
+      </div>
+      <span class="count-pill">{{ pagos|length }}</span>
+    </header>
+    <form class="inline-create" method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="formulario" value="pago">
+      <label>
+        <span>{{ pago_form.nombre.label }}</span>
+        {{ pago_form.nombre }}
+        {% for error in pago_form.nombre.errors %}<em>{{ error }}</em>{% endfor %}
+      </label>
+      <button class="button primary" type="submit">Agregar método</button>
+    </form>
+    <div class="catalog-list">
+      {% for pago in pagos %}
+        <div>
+          <strong>{{ pago.nombre }}</strong>
+          <div class="catalog-actions">
+            <span>{{ pago.total_ventas }} venta{{ pago.total_ventas|pluralize }}</span>
+            <a class="edit-link" href="{% url 'negocio:pago_editar' pago.id %}">Editar</a>
+            <a class="danger-link" href="{% url 'negocio:pago_eliminar' pago.id %}">Eliminar</a>
+          </div>
+        </div>
+      {% empty %}
+        <p class="catalog-empty">Todavía no hay métodos de pago.</p>
       {% endfor %}
     </div>
   </article>

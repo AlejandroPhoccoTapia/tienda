@@ -489,6 +489,8 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
   background: #fafbfa;
 }
 .inline-create label { flex: 1; min-width: 0; }
+.inline-fields { display: flex; flex: 1; gap: 10px; min-width: 0; }
+.inline-fields label { min-width: 120px; }
 .catalog-list { max-height: 390px; overflow-y: auto; }
 .catalog-list > div {
   display: flex;
@@ -501,9 +503,28 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
 .catalog-list > div:first-child { border-top: 0; }
 .catalog-list strong { font-size: 14px; }
 .catalog-list span { color: var(--muted); font-size: 12px; }
+.catalog-primary { display: grid; gap: 3px; }
+.catalog-primary small { color: var(--muted); font-size: 11px; }
 .catalog-empty { padding: 20px 22px; color: var(--muted); }
 .catalog-actions { display: flex; align-items: center; gap: 14px; }
 .catalog-actions a { font-size: 12px; }
+.edit-link { color: var(--green); font-weight: 700; }
+.compact-form { max-width: 620px; }
+.single-form-fields { display: grid; gap: 18px; }
+.single-form-fields label > span {
+  display: block;
+  margin: 0 0 7px 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.single-form-fields em {
+  display: block;
+  margin-top: 6px;
+  color: #b54236;
+  font-size: 12px;
+  font-style: normal;
+}
 
 .confirm-card {
   width: min(570px, 100%);
@@ -789,6 +810,7 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
   .form-grid .field-wide { grid-column: auto; }
   .record-form { padding: 18px; }
   .inline-create { align-items: stretch; flex-direction: column; }
+  .inline-fields { flex-direction: column; }
   .form-section-title { align-items: flex-start; flex-direction: column; }
   .package-quantity { width: 100%; }
   .package-fields, .lot-row, .sale-line { grid-template-columns: 1fr; }
