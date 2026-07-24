@@ -33,10 +33,12 @@ from .forms import (
 from .models import (
     Cliente,
     DetalleVenta,
+    DistribucionGanancia,
     InventarioLote,
     Marca,
     Paquete,
     Pedido,
+    PersonaGanancia,
     Producto,
     SalidaInventario,
     TipoPago,
@@ -248,7 +250,9 @@ def pedido_crear(request):
                         lote_objeto = lote_fila["form"].save(commit=False)
                         lote_objeto.paquete = paquete_objeto
                         lote_objeto.save()
-            messages.success(request, f"Pedido #{pedido.id} creado correctamente.")
+            messages.success(
+                request, f"Registro de paquetería #{pedido.id} creado correctamente."
+            )
             return redirect("negocio:pedido_detalle", pedido_id=pedido.id)
 
     return render(
@@ -269,12 +273,12 @@ def pedido_eliminar(request, pedido_id):
     if request.method == "POST":
         try:
             pedido.delete()
-            messages.success(request, f"Pedido #{pedido_id} eliminado.")
+            messages.success(request, f"Registro de paquetería #{pedido_id} eliminado.")
             return redirect("negocio:pedidos")
         except ProtectedError:
             messages.error(
                 request,
-                f"No se puede eliminar el pedido #{pedido_id} porque su inventario ya fue usado en ventas.",
+                f"No se puede eliminar el registro #{pedido_id} porque su inventario ya fue usado en ventas.",
             )
             return redirect("negocio:pedido_detalle", pedido_id=pedido_id)
 
@@ -282,7 +286,7 @@ def pedido_eliminar(request, pedido_id):
         request,
         "negocio/confirmar_eliminar.html",
         {
-            "titulo": f"Eliminar pedido #{pedido.id}",
+            "titulo": f"Eliminar registro de paquetería #{pedido.id}",
             "nombre": pedido.propietario or pedido.cuenta or f"Pedido #{pedido.id}",
             "descripcion": "También se eliminarán sus paquetes y lotes, siempre que no hayan sido usados en ventas.",
             "cancel_url": "negocio:pedido_detalle",
@@ -480,22 +484,68 @@ def ventas(request):
     tipo_pago_id = request.GET.get("tipo_pago", "")
     orden = request.GET.get("orden", "reciente")
 
-    items = Venta.objects.select_related("cliente", "tipo_pago").annotate(
-        unidades=Coalesce(
-            Sum("detalles__cantidad"), Value(0), output_field=IntegerField()
-        ),
-        subtotal=Coalesce(
-            Sum(
+    estadisticas_detalle = (
+        DetalleVenta.objects.filter(venta_id=OuterRef("pk"))
+        .values("venta_id")
+        .annotate(
+            unidades_total=Sum("cantidad"),
+            venta_bruta=Sum(
                 ExpressionWrapper(
-                    F("detalles__cantidad") * F("detalles__precio_unitario_venta"),
+                    F("cantidad") * F("precio_unitario_venta"),
                     output_field=DecimalField(max_digits=14, decimal_places=2),
                 )
             ),
+        )
+    )
+    estadisticas_costo = (
+        SalidaInventario.objects.filter(detalle_venta__venta_id=OuterRef("pk"))
+        .values("detalle_venta__venta_id")
+        .annotate(
+            costo=Sum(
+                ExpressionWrapper(
+                    F("cantidad") * F("inventario_lote__costo_unitario_soles"),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                )
+            )
+        )
+    )
+    estadisticas_karen = (
+        DistribucionGanancia.objects.filter(
+            venta_id=OuterRef("pk"), persona__nombre__iexact="Karen"
+        )
+        .values("venta_id")
+        .annotate(total=Sum("monto"))
+    )
+
+    items = Venta.objects.select_related("cliente", "tipo_pago").annotate(
+        unidades=Coalesce(
+            Subquery(estadisticas_detalle.values("unidades_total")),
+            Value(0),
+            output_field=IntegerField(),
+        ),
+        subtotal=Coalesce(
+            Subquery(estadisticas_detalle.values("venta_bruta")),
+            Value(0),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        ),
+        costo_total=Coalesce(
+            Subquery(estadisticas_costo.values("costo")),
+            Value(0),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        ),
+        monto_karen=Coalesce(
+            Subquery(estadisticas_karen.values("total")),
             Value(0),
             output_field=DecimalField(max_digits=14, decimal_places=2),
         ),
     )
-    items = items.annotate(total=F("subtotal") - F("descuento"))
+    items = items.annotate(
+        total=F("subtotal") - F("descuento"),
+        mi_ganancia=F("subtotal")
+        - F("descuento")
+        - F("costo_total")
+        - F("monto_karen"),
+    )
 
     if mes:
         try:
@@ -534,7 +584,7 @@ def venta_crear(request):
         form = VentaForm(
             initial={
                 "fecha": timezone.localtime(),
-                "estado_entrega": "Pendiente",
+                "estado_entrega": "No entregado",
             }
         )
         total_detalles = 1
@@ -592,6 +642,14 @@ def venta_crear(request):
         if valido:
             with transaction.atomic():
                 venta = form.save()
+                persona_karen, _ = PersonaGanancia.objects.get_or_create(
+                    nombre="Karen"
+                )
+                DistribucionGanancia.objects.create(
+                    venta=venta,
+                    persona=persona_karen,
+                    monto=form.cleaned_data.get("monto_karen") or 0,
+                )
                 for detalle_fila in detalles:
                     detalle_form = detalle_fila["form"]
                     lote = detalle_form.cleaned_data["inventario_lote"]

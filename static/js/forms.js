@@ -1,4 +1,38 @@
 document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".copy-phone").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const phone = button.dataset.phone;
+      let copied = false;
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(phone);
+          copied = true;
+        } catch (error) {
+          copied = false;
+        }
+      }
+      if (!copied) {
+        const temporary = document.createElement("textarea");
+        temporary.value = phone;
+        temporary.style.position = "fixed";
+        temporary.style.opacity = "0";
+        document.body.appendChild(temporary);
+        temporary.select();
+        copied = document.execCommand("copy");
+        temporary.remove();
+      }
+      if (copied) {
+        const original = button.textContent;
+        button.textContent = "✓";
+        button.classList.add("copied");
+        window.setTimeout(() => {
+          button.textContent = original;
+          button.classList.remove("copied");
+        }, 1400);
+      }
+    });
+  });
+
   const dropZone = document.querySelector("#photo-drop-zone");
   const photoInput = dropZone?.querySelector('input[type="file"]');
   const photoPreview = document.querySelector("#photo-preview");

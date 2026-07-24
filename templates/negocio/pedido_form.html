@@ -1,12 +1,12 @@
 {% extends "negocio/base.html" %}
-{% block title %}Nuevo pedido{% endblock %}
+{% block title %}Nuevo registro de paquetería{% endblock %}
 {% block content %}
-<a class="back-link" href="{% url 'negocio:pedidos' %}">← Volver a pedidos</a>
+<a class="back-link" href="{% url 'negocio:pedidos' %}">← Volver a paquetería</a>
 
 <section class="page-heading form-heading">
   <div>
     <p class="eyebrow">Compras e importación</p>
-    <h1>Crear pedido completo</h1>
+    <h1>Crear registro de paquetería</h1>
     <p class="subtitle">Indica los paquetes y registra los productos y costos de cada uno.</p>
   </div>
 </section>
@@ -20,7 +20,7 @@
     <div class="form-section-title">
       <div>
         <span class="step-number">1</span>
-        <div><p class="eyebrow">Información general</p><h2>Datos del pedido</h2></div>
+        <div><p class="eyebrow">Información general</p><h2>Datos de la compra</h2></div>
       </div>
     </div>
     {% if form.non_field_errors %}<div class="form-alert">{{ form.non_field_errors }}</div>{% endif %}
@@ -97,7 +97,7 @@
 
   <div class="workflow-actions">
     <a class="button ghost" href="{% url 'negocio:pedidos' %}">Cancelar</a>
-    <button class="button primary" type="submit">Guardar pedido completo</button>
+    <button class="button primary" type="submit">Guardar registro</button>
   </div>
 </form>
 

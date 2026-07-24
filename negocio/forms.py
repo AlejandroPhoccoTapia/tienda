@@ -169,6 +169,16 @@ class LotePedidoForm(forms.ModelForm):
 
 
 class VentaForm(forms.ModelForm):
+    monto_karen = forms.DecimalField(
+        label="Karen (S/)",
+        min_value=0,
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        initial=0,
+        widget=forms.NumberInput(attrs={"min": "0", "step": "0.01"}),
+    )
+
     class Meta:
         model = Venta
         fields = [
@@ -197,9 +207,7 @@ class VentaForm(forms.ModelForm):
             "descuento": forms.NumberInput(attrs={"min": "0", "step": "0.01"}),
             "estado_entrega": forms.Select(
                 choices=[
-                    ("Pendiente", "Pendiente"),
-                    ("En preparación", "En preparación"),
-                    ("En camino", "En camino"),
+                    ("No entregado", "No entregado"),
                     ("Entregado", "Entregado"),
                 ]
             ),
@@ -209,6 +217,18 @@ class VentaForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["fecha"].input_formats = ["%Y-%m-%dT%H:%M"]
         self.fields["cliente"].required = False
+        self.order_fields(
+            [
+                "fecha",
+                "cliente",
+                "tipo_pago",
+                "direccion_entrega",
+                "descuento",
+                "monto_karen",
+                "pagado",
+                "estado_entrega",
+            ]
+        )
 
 
 class DetalleVentaForm(forms.ModelForm):

@@ -391,7 +391,41 @@ tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover td { background: #fbfcfb; }
 td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; }
 .table-empty { padding: 30px; color: var(--muted); text-align: center; }
-.sales-table td:last-child { color: var(--green); }
+.sales-table { min-width: 1450px; }
+.sales-table th, .sales-table td { padding: 15px 16px; }
+.sales-table td { vertical-align: middle; }
+.sales-table .profit-cell { color: var(--green); }
+.sales-table .profit-cell.negative { color: #b54135; }
+.client-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.copy-phone {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: white;
+  color: var(--green);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 800;
+}
+.copy-phone:hover { border-color: var(--green); background: var(--green-soft); }
+.copy-phone.copied { background: var(--green); color: white; }
+.payment-status {
+  display: inline-flex;
+  margin-top: 2px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.payment-status.paid { background: var(--green-soft); color: var(--green); }
+.payment-status.unpaid { background: #fff0db; color: #97520f; }
 
 .empty-state {
   padding: 64px 24px;

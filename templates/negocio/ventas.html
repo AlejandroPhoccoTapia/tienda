@@ -45,18 +45,47 @@
     <div class="table-wrap">
       <table class="sales-table">
         <thead>
-          <tr><th>Venta</th><th>Fecha</th><th>Cliente</th><th>Pago</th><th>Estado</th><th>Unidades</th><th>Total</th></tr>
+          <tr>
+            <th># Venta</th>
+            <th>Fecha</th>
+            <th>Cliente</th>
+            <th>Método de pago</th>
+            <th>Estado</th>
+            <th>Unidades</th>
+            <th>Costo</th>
+            <th>Precio de venta</th>
+            <th>Karen</th>
+            <th>Mi ganancia</th>
+          </tr>
         </thead>
         <tbody>
           {% for venta in ventas %}
             <tr>
               <td><strong>#{{ venta.id }}</strong></td>
               <td>{{ venta.fecha|date:"d M Y" }}<small>{{ venta.fecha|date:"H:i" }}</small></td>
-              <td>{{ venta.cliente.nombre|default:"Cliente no registrado" }}<small>{{ venta.direccion_entrega|default:"Sin dirección" }}</small></td>
-              <td>{{ venta.tipo_pago.nombre }}<small>{% if venta.pagado %}Pago completo{% else %}Pendiente de pago{% endif %}</small></td>
-              <td><span class="status {% if venta.estado_entrega|lower == 'entregado' %}success{% else %}pending{% endif %}">{{ venta.estado_entrega }}</span></td>
-              <td>{{ venta.unidades }}</td>
-              <td><strong>S/ {{ venta.total|floatformat:2 }}</strong>{% if venta.descuento %}<small>Desc. S/ {{ venta.descuento|floatformat:2 }}</small>{% endif %}</td>
+              <td>
+                <div class="client-line">
+                  <strong>{{ venta.cliente.nombre|default:"Cliente no registrado" }}</strong>
+                  {% if venta.cliente.telefono %}
+                    <button class="copy-phone" type="button" data-phone="{{ venta.cliente.telefono }}" title="Copiar teléfono de {{ venta.cliente.nombre }}" aria-label="Copiar teléfono de {{ venta.cliente.nombre }}">⧉</button>
+                  {% endif %}
+                </div>
+                <small>{{ venta.direccion_entrega|default:"Sin dirección" }}</small>
+              </td>
+              <td>
+                <strong>{{ venta.tipo_pago.nombre }}</strong>
+                <small><span class="payment-status {% if venta.pagado %}paid{% else %}unpaid{% endif %}">{% if venta.pagado %}Pagado{% else %}Pendiente de pago{% endif %}</span></small>
+              </td>
+              <td>
+                <span class="status {% if venta.estado_entrega|lower == 'entregado' %}success{% else %}pending{% endif %}">
+                  {% if venta.estado_entrega|lower == "entregado" %}Entregado{% else %}No entregado{% endif %}
+                </span>
+              </td>
+              <td><strong>{{ venta.unidades }}</strong></td>
+              <td><strong>S/ {{ venta.costo_total|floatformat:2 }}</strong><small>Costo de productos</small></td>
+              <td><strong>S/ {{ venta.total|floatformat:2 }}</strong><small>Desc. S/ {{ venta.descuento|floatformat:2 }}</small></td>
+              <td><strong>S/ {{ venta.monto_karen|floatformat:2 }}</strong><small>Entrega</small></td>
+              <td class="profit-cell {% if venta.mi_ganancia < 0 %}negative{% endif %}"><strong>S/ {{ venta.mi_ganancia|floatformat:2 }}</strong><small>Venta − costo − Karen</small></td>
             </tr>
           {% endfor %}
         </tbody>

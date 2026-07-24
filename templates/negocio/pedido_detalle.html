@@ -1,10 +1,10 @@
 {% extends "negocio/base.html" %}
-{% block title %}Pedido #{{ pedido.id }}{% endblock %}
+{% block title %}Paquetería #{{ pedido.id }}{% endblock %}
 {% block content %}
-<a class="back-link" href="{% url 'negocio:pedidos' %}">← Volver a pedidos</a>
+<a class="back-link" href="{% url 'negocio:pedidos' %}">← Volver a paquetería</a>
 <section class="detail-heading">
   <div>
-    <p class="eyebrow">Pedido #{{ pedido.id }}</p>
+    <p class="eyebrow">Paquetería #{{ pedido.id }}</p>
     <h1>{{ pedido.propietario|default:"Sin propietario" }}</h1>
     <p class="subtitle">Registrado el {{ pedido.fecha|date:"d \d\e F \d\e Y, H:i" }}</p>
   </div>
@@ -13,7 +13,7 @@
       <span>Descuento</span>
       <strong>S/ {{ pedido.descuento|floatformat:2 }}</strong>
     </div>
-    <a class="button danger" href="{% url 'negocio:pedido_eliminar' pedido.id %}">Eliminar pedido</a>
+    <a class="button danger" href="{% url 'negocio:pedido_eliminar' pedido.id %}">Eliminar registro</a>
   </div>
 </section>
 

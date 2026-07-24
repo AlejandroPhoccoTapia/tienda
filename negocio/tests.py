@@ -10,6 +10,7 @@ from django.utils import timezone
 from .models import (
     Cliente,
     DetalleVenta,
+    DistribucionGanancia,
     InventarioLote,
     Marca,
     Paquete,
@@ -297,8 +298,9 @@ class VistasNegocioTests(TestCase):
                 "tipo_pago": self.yape.id,
                 "direccion_entrega": "Miraflores",
                 "descuento": "5.00",
+                "monto_karen": "10.00",
                 "pagado": "on",
-                "estado_entrega": "En camino",
+                "estado_entrega": "No entregado",
                 "detalle_count": "1",
                 "detalle-0-inventario_lote": self.lote.id,
                 "detalle-0-cantidad": "2",
@@ -310,6 +312,19 @@ class VistasNegocioTests(TestCase):
         detalle = venta.detalles.get()
         self.assertEqual(detalle.cantidad, 2)
         self.assertEqual(detalle.salidas.aggregate(total=Sum("cantidad"))["total"], 2)
+        self.assertEqual(
+            DistribucionGanancia.objects.get(
+                venta=venta, persona__nombre="Karen"
+            ).monto,
+            Decimal("10.00"),
+        )
+        venta_calculada = self.client.get(reverse("negocio:ventas")).context[
+            "ventas"
+        ].get(pk=venta.id)
+        self.assertEqual(venta_calculada.costo_total, Decimal("40"))
+        self.assertEqual(venta_calculada.total, Decimal("75"))
+        self.assertEqual(venta_calculada.monto_karen, Decimal("10"))
+        self.assertEqual(venta_calculada.mi_ganancia, Decimal("25"))
 
     def test_no_registra_venta_sin_stock_suficiente(self):
         response = self.client.post(
@@ -320,7 +335,7 @@ class VistasNegocioTests(TestCase):
                 "tipo_pago": self.yape.id,
                 "direccion_entrega": "Venta imposible",
                 "descuento": "0",
-                "estado_entrega": "Pendiente",
+                "estado_entrega": "No entregado",
                 "detalle_count": "1",
                 "detalle-0-inventario_lote": self.lote.id,
                 "detalle-0-cantidad": "99",
@@ -365,7 +380,7 @@ class VistasNegocioTests(TestCase):
                 "tipo_pago": self.yape.id,
                 "direccion_entrega": "Venta doble imposible",
                 "descuento": "0",
-                "estado_entrega": "Pendiente",
+                "estado_entrega": "No entregado",
                 "detalle_count": "2",
                 "detalle-0-inventario_lote": self.lote.id,
                 "detalle-0-cantidad": "4",

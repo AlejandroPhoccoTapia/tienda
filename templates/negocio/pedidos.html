@@ -1,15 +1,15 @@
 {% extends "negocio/base.html" %}
-{% block title %}Pedidos{% endblock %}
+{% block title %}Paquetería{% endblock %}
 {% block content %}
 <section class="page-heading">
   <div>
     <p class="eyebrow">Compras e importación</p>
-    <h1>Pedidos</h1>
-    <p class="subtitle">Revisa el avance de cada pedido y entra al detalle cuando lo necesites.</p>
+    <h1>Paquetería</h1>
+    <p class="subtitle">Revisa los paquetes que vienen en camino y los que ya ingresaron al inventario.</p>
   </div>
   <div class="heading-actions">
     <span class="count-pill">{{ pedidos|length }} pedido{{ pedidos|length|pluralize }}</span>
-    <a class="button primary" href="{% url 'negocio:pedido_crear' %}">+ Nuevo pedido</a>
+    <a class="button primary" href="{% url 'negocio:pedido_crear' %}">+ Nuevo registro</a>
   </div>
 </section>
 
@@ -36,7 +36,7 @@
   </section>
 {% else %}
   <section class="empty-state">
-    <h2>Aún no hay pedidos</h2>
+    <h2>Aún no hay registros de paquetería</h2>
     <p>Cuando registres el primero aparecerá aquí.</p>
   </section>
 {% endif %}
