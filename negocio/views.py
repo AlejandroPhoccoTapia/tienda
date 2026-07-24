@@ -57,13 +57,18 @@ def productos(request):
     tipo_id = request.GET.get("tipo", "")
 
     entradas = (
-        InventarioLote.objects.filter(producto_id=OuterRef("pk"))
+        InventarioLote.objects.filter(
+            producto_id=OuterRef("pk"), paquete__entregado=True
+        )
         .values("producto_id")
         .annotate(total=Sum("cantidad_inicial"))
         .values("total")
     )
     salidas = (
-        SalidaInventario.objects.filter(inventario_lote__producto_id=OuterRef("pk"))
+        SalidaInventario.objects.filter(
+            inventario_lote__producto_id=OuterRef("pk"),
+            inventario_lote__paquete__entregado=True,
+        )
         .values("inventario_lote__producto_id")
         .annotate(total=Sum("cantidad"))
         .values("total")

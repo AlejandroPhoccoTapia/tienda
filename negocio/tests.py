@@ -77,6 +77,21 @@ class VistasNegocioTests(TestCase):
         )
 
     def test_productos_filtra_marca_y_tipo_y_calcula_stock(self):
+        pedido_pendiente = Pedido.objects.create(
+            cuenta="Pendiente",
+            fecha=timezone.make_aware(datetime(2026, 7, 20, 10, 0)),
+        )
+        paquete_pendiente = Paquete.objects.create(
+            pedido=pedido_pendiente,
+            codigo_seguimiento="PENDIENTE-01",
+            entregado=False,
+        )
+        InventarioLote.objects.create(
+            paquete=paquete_pendiente,
+            producto=self.producto_a,
+            cantidad_inicial=25,
+            costo_unitario_soles=Decimal("18.00"),
+        )
         response = self.client.get(
             reverse("negocio:productos"),
             {"marca": self.marca_a.id, "tipo": self.tipo_a.id},
@@ -322,6 +337,24 @@ class VistasNegocioTests(TestCase):
         self.assertContains(response, f"Lote #{self.lote.id}")
         self.assertContains(response, "Costo S/ 20.00")
         self.assertContains(response, "Disponible: 7")
+
+    def test_selector_de_venta_excluye_lotes_no_entregados(self):
+        pedido = Pedido.objects.create(
+            cuenta="Aún viajando",
+            fecha=timezone.make_aware(datetime(2026, 7, 21, 10, 0)),
+        )
+        paquete = Paquete.objects.create(
+            pedido=pedido, codigo_seguimiento="VIAJANDO-99", entregado=False
+        )
+        lote_pendiente = InventarioLote.objects.create(
+            paquete=paquete,
+            producto=self.producto_b,
+            cantidad_inicial=10,
+            costo_unitario_soles=Decimal("25.00"),
+        )
+        response = self.client.get(reverse("negocio:venta_crear"))
+        self.assertNotContains(response, f"Lote #{lote_pendiente.id}")
+        self.assertNotContains(response, "VIAJANDO-99")
 
     def test_no_permite_superar_stock_repartiendo_el_mismo_lote(self):
         response = self.client.post(

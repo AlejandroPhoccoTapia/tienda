@@ -27,7 +27,7 @@ def lotes_con_stock():
             )
         )
         .annotate(stock_disponible=F("cantidad_inicial") - F("cantidad_usada"))
-        .filter(stock_disponible__gt=0)
+        .filter(paquete__entregado=True, stock_disponible__gt=0)
         .order_by("producto__nombre", "paquete__pedido__fecha", "id")
     )
 
