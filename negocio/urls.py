@@ -20,6 +20,11 @@ urlpatterns = [
         name="pedido_eliminar",
     ),
     path("pedidos/<int:pedido_id>/", views.pedido_detalle, name="pedido_detalle"),
+    path(
+        "pedidos/productos/<int:lote_id>/recibidos/",
+        views.pedido_producto_recibido_actualizar,
+        name="pedido_producto_recibido_actualizar",
+    ),
     path("ventas/", views.ventas, name="ventas"),
     path("ventas/nueva/", views.venta_crear, name="venta_crear"),
     path(

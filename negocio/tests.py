@@ -43,12 +43,13 @@ class VistasNegocioTests(TestCase):
             fecha=timezone.make_aware(datetime(2026, 7, 2, 10, 0)),
         )
         cls.paquete = Paquete.objects.create(
-            pedido=cls.pedido, codigo_seguimiento="ABC", entregado=True
+            pedido=cls.pedido, codigo_seguimiento="ABC"
         )
         cls.lote = InventarioLote.objects.create(
-            paquete=cls.paquete,
+            pedido=cls.pedido,
             producto=cls.producto_a,
             cantidad_inicial=10,
+            cantidad_recibida=10,
             costo_unitario_soles=Decimal("20.00"),
         )
         cls.yape = TipoPago.objects.create(nombre="Yape")
@@ -85,12 +86,12 @@ class VistasNegocioTests(TestCase):
         paquete_pendiente = Paquete.objects.create(
             pedido=pedido_pendiente,
             codigo_seguimiento="PENDIENTE-01",
-            entregado=False,
         )
         InventarioLote.objects.create(
-            paquete=paquete_pendiente,
+            pedido=pedido_pendiente,
             producto=self.producto_a,
             cantidad_inicial=25,
+            cantidad_recibida=0,
             costo_unitario_soles=Decimal("18.00"),
         )
         response = self.client.get(
@@ -126,6 +127,41 @@ class VistasNegocioTests(TestCase):
         )
         self.assertContains(detalle, 'aria-expanded="true"')
 
+    def test_actualiza_recibidos_y_recalcula_stock(self):
+        response = self.client.post(
+            reverse(
+                "negocio:pedido_producto_recibido_actualizar",
+                args=[self.lote.id],
+            ),
+            {f"recibido-{self.lote.id}-cantidad_recibida": "8"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("negocio:pedido_detalle", args=[self.pedido.id]),
+        )
+        self.lote.refresh_from_db()
+        self.assertEqual(self.lote.cantidad_recibida, 8)
+        productos = self.client.get(reverse("negocio:productos"))
+        producto = next(
+            item
+            for item in productos.context["productos"]
+            if item.id == self.producto_a.id
+        )
+        self.assertEqual(producto.stock, 5)
+
+    def test_no_reduce_recibidos_por_debajo_de_lo_vendido(self):
+        response = self.client.post(
+            reverse(
+                "negocio:pedido_producto_recibido_actualizar",
+                args=[self.lote.id],
+            ),
+            {f"recibido-{self.lote.id}-cantidad_recibida": "2"},
+            follow=True,
+        )
+        self.lote.refresh_from_db()
+        self.assertEqual(self.lote.cantidad_recibida, 10)
+        self.assertContains(response, "unidades ya vendidas")
+
     def test_ventas_filtra_mes_y_pago(self):
         response = self.client.get(
             reverse("negocio:ventas"),
@@ -151,15 +187,14 @@ class VistasNegocioTests(TestCase):
                 "descuento": "5.00",
                 "dolar_valor": "3.7500",
                 "package_count": "1",
+                "product_count": "1",
                 "paquete-0-codigo_seguimiento": "NUEVO-001",
-                "paquete-0-entregado": "",
-                "paquete-0-fecha_entrega": "",
-                "lote-0-count": "1",
-                "lote-0-0-producto": self.producto_b.id,
-                "lote-0-0-cantidad_inicial": "4",
-                "lote-0-0-costo_unitario_dolar": "12.50",
-                "lote-0-0-costo_unitario_soles": "46.88",
-                "lote-0-0-costo_soles_manual": "on",
+                "producto-0-producto": self.producto_b.id,
+                "producto-0-cantidad_inicial": "4",
+                "producto-0-cantidad_recibida": "2",
+                "producto-0-costo_unitario_dolar": "12.50",
+                "producto-0-costo_unitario_soles": "46.88",
+                "producto-0-costo_soles_manual": "on",
             },
         )
         pedido = Pedido.objects.get(cuenta="Cuenta nueva")
@@ -168,7 +203,8 @@ class VistasNegocioTests(TestCase):
         )
         self.assertEqual(pedido.propietario, "Diego")
         self.assertEqual(pedido.paquetes.count(), 1)
-        self.assertEqual(pedido.paquetes.get().lotes.get().cantidad_inicial, 4)
+        self.assertEqual(pedido.lotes.get().cantidad_inicial, 4)
+        self.assertEqual(pedido.lotes.get().cantidad_recibida, 2)
 
     def test_crea_pedido_con_varios_paquetes(self):
         data = {
@@ -179,18 +215,18 @@ class VistasNegocioTests(TestCase):
             "descuento": "0",
             "dolar_valor": "3.7500",
             "package_count": "2",
+            "product_count": "2",
         }
         for indice, producto in enumerate([self.producto_a, self.producto_b]):
             data.update(
                 {
                     f"paquete-{indice}-codigo_seguimiento": f"PACK-{indice}",
-                    f"paquete-{indice}-fecha_entrega": "",
-                    f"lote-{indice}-count": "1",
-                    f"lote-{indice}-0-producto": producto.id,
-                    f"lote-{indice}-0-cantidad_inicial": "2",
-                    f"lote-{indice}-0-costo_unitario_dolar": "10.00",
-                    f"lote-{indice}-0-costo_unitario_soles": "37.50",
-                    f"lote-{indice}-0-costo_soles_manual": "on",
+                    f"producto-{indice}-producto": producto.id,
+                    f"producto-{indice}-cantidad_inicial": "2",
+                    f"producto-{indice}-cantidad_recibida": "0",
+                    f"producto-{indice}-costo_unitario_dolar": "10.00",
+                    f"producto-{indice}-costo_unitario_soles": "37.50",
+                    f"producto-{indice}-costo_soles_manual": "on",
                 }
             )
         response = self.client.post(reverse("negocio:pedido_crear"), data)
@@ -199,7 +235,7 @@ class VistasNegocioTests(TestCase):
             response, reverse("negocio:pedido_detalle", args=[pedido.id])
         )
         self.assertEqual(pedido.paquetes.count(), 2)
-        self.assertEqual(InventarioLote.objects.filter(paquete__pedido=pedido).count(), 2)
+        self.assertEqual(InventarioLote.objects.filter(pedido=pedido).count(), 2)
 
     def test_agrega_marca_y_tipo_desde_catalogos(self):
         marca_response = self.client.post(
@@ -386,18 +422,19 @@ class VistasNegocioTests(TestCase):
         self.assertContains(response, "S/20.00")
         self.assertContains(response, "Stock 7")
 
-    def test_selector_de_venta_excluye_lotes_no_entregados(self):
+    def test_selector_de_venta_excluye_productos_no_recibidos(self):
         pedido = Pedido.objects.create(
             cuenta="Aún viajando",
             fecha=timezone.make_aware(datetime(2026, 7, 21, 10, 0)),
         )
         paquete = Paquete.objects.create(
-            pedido=pedido, codigo_seguimiento="VIAJANDO-99", entregado=False
+            pedido=pedido, codigo_seguimiento="VIAJANDO-99"
         )
         lote_pendiente = InventarioLote.objects.create(
-            paquete=paquete,
+            pedido=pedido,
             producto=self.producto_b,
             cantidad_inicial=10,
+            cantidad_recibida=0,
             costo_unitario_soles=Decimal("25.00"),
         )
         response = self.client.get(reverse("negocio:venta_crear"))

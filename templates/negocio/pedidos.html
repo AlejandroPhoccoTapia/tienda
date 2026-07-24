@@ -29,8 +29,8 @@
             <strong>{{ pedido.propietario|default:"Sin propietario" }}</strong>
             <small>{{ pedido.cuenta|default:"Sin cuenta" }} · {{ pedido.direccion|default:"Sin dirección" }}</small>
           </div>
-          <div class="parcel-metric"><span>Paquetes</span><strong>{{ pedido.total_paquetes }}</strong><small>{{ pedido.paquetes_entregados }} entregados</small></div>
-          <div class="parcel-metric"><span>Unidades</span><strong>{{ pedido.total_unidades }}</strong></div>
+          <div class="parcel-metric"><span>Paquetes</span><strong>{{ pedido.total_paquetes }}</strong><small>Códigos</small></div>
+          <div class="parcel-metric"><span>Recibidos</span><strong>{{ pedido.total_recibidas }}/{{ pedido.total_unidades }}</strong><small>Unidades</small></div>
           <div class="parcel-metric"><span>Costo total</span><strong>S/ {{ pedido.costo_total|floatformat:2 }}</strong><small>Desc. S/ {{ pedido.descuento|floatformat:2 }}</small></div>
           <div class="parcel-metric"><span>Dólar</span><strong>{% if pedido.dolar_valor %}S/ {{ pedido.dolar_valor|floatformat:4 }}{% else %}—{% endif %}</strong></div>
           <form class="parcel-delete-form" action="{% url 'negocio:pedido_eliminar' pedido.id %}" method="post" onsubmit="return confirm('¿Eliminar este registro de paquetería?');">
@@ -47,32 +47,38 @@
             <div><span>Descuento</span><strong>S/ {{ pedido.descuento|floatformat:2 }}</strong></div>
           </div>
 
+          <div class="tracking-codes">
+            <span>Códigos de paquetes</span>
+            <div>
+              {% for paquete in pedido.paquetes.all %}
+                <strong>{{ paquete.codigo_seguimiento }}</strong>
+              {% empty %}
+                <small>Sin códigos registrados</small>
+              {% endfor %}
+            </div>
+          </div>
+
           <div class="parcel-packages">
-            {% for paquete in pedido.paquetes.all %}
-              <article class="parcel-package">
-                <header>
-                  <div>
-                    <span class="status {% if paquete.entregado %}success{% else %}pending{% endif %}">{% if paquete.entregado %}Entregado{% else %}En camino{% endif %}</span>
-                    <strong>{{ paquete.codigo_seguimiento|default:"Sin seguimiento" }}</strong>
-                  </div>
-                  <small>{% if paquete.fecha_entrega %}{{ paquete.fecha_entrega|date:"d M Y · H:i" }}{% else %}Sin fecha de entrega{% endif %}</small>
-                </header>
-                <div class="parcel-products-heading"><span>Producto</span><span>Marca / tipo</span><span>Cantidad</span><span>Costo unitario</span><span>Total</span></div>
-                {% for lote in paquete.lotes.all %}
-                  <div class="parcel-product-row">
-                    <div><strong>{{ lote.producto.nombre }}</strong></div>
-                    <div><span>{{ lote.producto.marca|default:"—" }} · {{ lote.producto.tipo_producto|default:"—" }}</span></div>
-                    <div><strong>{{ lote.cantidad_inicial }}</strong></div>
-                    <div><strong>S/ {{ lote.costo_unitario_soles|floatformat:2 }}</strong>{% if lote.costo_unitario_dolar %}<small>US$ {{ lote.costo_unitario_dolar|floatformat:2 }}</small>{% endif %}</div>
-                    <div><strong>S/ {{ lote.costo_total|floatformat:2 }}</strong></div>
-                  </div>
-                {% empty %}
-                  <p class="table-empty">Este paquete no tiene productos.</p>
-                {% endfor %}
-              </article>
-            {% empty %}
-              <p class="table-empty">Este pedido no tiene paquetes registrados.</p>
-            {% endfor %}
+            <article class="parcel-package">
+              <div class="parcel-products-heading"><span>Producto</span><span>Marca / tipo</span><span>Pedido</span><span>Recibido</span><span>Vendido</span><span>Disponible</span><span>Costo</span></div>
+              {% for lote in pedido.productos_pedido %}
+                <div class="parcel-product-row">
+                  <div><strong>{{ lote.producto.nombre }}</strong></div>
+                  <div><span>{{ lote.producto.marca|default:"—" }} · {{ lote.producto.tipo_producto|default:"—" }}</span></div>
+                  <div><strong>{{ lote.cantidad_inicial }}</strong></div>
+                  <form class="received-counter" action="{% url 'negocio:pedido_producto_recibido_actualizar' lote.id %}" method="post">
+                    {% csrf_token %}
+                    {{ lote.form_recibidos.cantidad_recibida }}
+                    <button class="button tiny ghost" type="submit">Guardar</button>
+                  </form>
+                  <div><strong>{{ lote.cantidad_vendida }}</strong></div>
+                  <div><strong>{{ lote.stock_disponible }}</strong></div>
+                  <div><strong>S/ {{ lote.costo_unitario_soles|floatformat:2 }}</strong><small>Total S/ {{ lote.costo_total|floatformat:2 }}</small></div>
+                </div>
+              {% empty %}
+                <p class="table-empty">Este pedido no tiene productos.</p>
+              {% endfor %}
+            </article>
           </div>
         </div>
       </article>

@@ -79,16 +79,17 @@ class Command(BaseCommand):
         )
         if creado:
             paquete = Paquete.objects.create(
-                pedido=pedido_1, codigo_seguimiento="USPS-9400-1000-001", entregado=False
+                pedido=pedido_1, codigo_seguimiento="USPS-9400-1000-001"
             )
             for producto, cantidad, usd, soles in [
                 (productos[0], 12, "8.90", "33.33"),
                 (productos[2], 8, "14.00", "52.43"),
             ]:
                 InventarioLote.objects.create(
-                    paquete=paquete,
+                    pedido=pedido_1,
                     producto=producto,
                     cantidad_inicial=cantidad,
+                    cantidad_recibida=0,
                     costo_unitario_dolar=Decimal(usd),
                     costo_unitario_soles=Decimal(soles),
                     costo_soles_manual=False,
@@ -108,17 +109,16 @@ class Command(BaseCommand):
             paquete = Paquete.objects.create(
                 pedido=pedido_2,
                 codigo_seguimiento="AMZ-7842-PE",
-                entregado=True,
-                fecha_entrega=ahora - timedelta(days=31),
             )
             for producto, cantidad, usd, soles in [
                 (productos[1], 10, "12.50", "46.50"),
                 (productos[3], 6, "30.00", "111.60"),
             ]:
                 InventarioLote.objects.create(
-                    paquete=paquete,
+                    pedido=pedido_2,
                     producto=producto,
                     cantidad_inicial=cantidad,
+                    cantidad_recibida=cantidad,
                     costo_unitario_dolar=Decimal(usd),
                     costo_unitario_soles=Decimal(soles),
                     costo_soles_manual=False,

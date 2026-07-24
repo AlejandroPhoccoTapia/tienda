@@ -792,6 +792,59 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
   font-style: normal;
 }
 .inline-order-creator .package-editor { box-shadow: none; }
+.order-form-sections { display: grid; gap: 14px; }
+.order-form-block {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+}
+.order-form-block .inline-panel-subheading {
+  margin: 0;
+  padding: 12px 14px;
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+  background: #fafbfa;
+}
+.tracking-code-list,
+.order-product-list { display: grid; }
+.tracking-code-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 32px;
+  gap: 10px;
+  align-items: end;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.tracking-code-row:last-child,
+.order-product-line:last-child { border-bottom: 0; }
+.tracking-code-row label > span,
+.order-product-line label > span {
+  display: block;
+  margin: 0 0 5px 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.tracking-code-row em,
+.order-product-line em {
+  display: block;
+  margin-top: 4px;
+  color: #b54135;
+  font-size: 10px;
+  font-style: normal;
+}
+.order-product-line {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(170px, 1.5fr) .7fr .7fr .85fr .85fr 1.15fr 32px;
+  gap: 9px;
+  align-items: end;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.tracking-code-row .remove-line,
+.order-product-line .remove-line { margin-bottom: 6px; }
 .parcel-list { display: grid; gap: 12px; }
 .parcel-order {
   overflow: hidden;
@@ -880,6 +933,31 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
   white-space: nowrap;
 }
 .parcel-packages { display: grid; gap: 10px; }
+.tracking-codes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.tracking-codes > span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .35px;
+  text-transform: uppercase;
+}
+.tracking-codes > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tracking-codes strong {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: white;
+  font-size: 10px;
+}
 .parcel-package {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -903,7 +981,7 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
 .parcel-products-heading,
 .parcel-product-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.7fr) minmax(130px, 1.2fr) .55fr .8fr .8fr;
+  grid-template-columns: minmax(160px, 1.6fr) minmax(115px, 1.1fr) .55fr 1fr .55fr .65fr .85fr;
   gap: 12px;
   align-items: center;
 }
@@ -925,6 +1003,17 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
   margin-top: 3px;
   color: var(--muted);
   font-size: 9px;
+}
+.received-counter {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+}
+.received-counter input {
+  min-width: 0;
+  height: 32px;
+  padding: 5px 7px;
 }
 
 .empty-state {
@@ -1338,6 +1427,15 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
   .compact-edit-grid { grid-template-columns: repeat(3, 1fr); }
   .product-inline-form { grid-template-columns: repeat(2, 1fr); }
   .compact-order-fields { grid-template-columns: repeat(3, 1fr); }
+  .order-product-line {
+    grid-template-columns: repeat(3, 1fr);
+    padding-right: 52px;
+  }
+  .order-product-line .remove-line {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }
   .parcel-summary { grid-template-columns: 120px minmax(170px, 1fr) repeat(2, 90px); }
   .parcel-delete-form { text-align: left; }
 }
@@ -1394,6 +1492,8 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
   .sale-products-toolbar { align-items: flex-start; }
   .parcel-toolbar { margin-top: -8px; }
   .compact-order-fields { grid-template-columns: 1fr; }
+  .order-product-line { grid-template-columns: 1fr; }
+  .tracking-codes { align-items: flex-start; flex-direction: column; }
   .parcel-summary { grid-template-columns: 1fr auto; }
   .parcel-owner { grid-column: 1 / -1; }
   .parcel-metric { min-width: 0; }

@@ -135,37 +135,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const orderForm = document.querySelector("#order-form");
   if (orderForm) {
-    const packagesContainer = document.querySelector("#packages-container");
-    const packageTemplate = document.querySelector("#package-template");
-    const lotTemplate = document.querySelector("#lot-template");
+    const packagesContainer = document.querySelector("#package-codes-container");
+    const productsContainer = document.querySelector("#order-products-container");
+    const packageTemplate = document.querySelector("#package-code-template");
+    const productTemplate = document.querySelector("#order-product-template");
     const packageCount = document.querySelector("#package-count");
-    const packageDesired = document.querySelector("#package-desired");
-    const deletions = document.querySelector("#package-deletions");
+    const productCount = document.querySelector("#order-product-count");
+    const packageDeletions = document.querySelector("#package-deletions");
+    const productDeletions = document.querySelector("#order-product-deletions");
 
-    const relabelPackages = () => {
-      packagesContainer.querySelectorAll(".package-editor").forEach((card, index) => {
-        card.querySelector(".package-label").textContent = index + 1;
-      });
-      packageDesired.value = packagesContainer.querySelectorAll(".package-editor").length;
-    };
-
-    const markDeleted = (name) => {
+    const markDeleted = (name, container) => {
       const input = document.createElement("input");
       input.type = "hidden";
       input.name = name;
       input.value = "1";
-      deletions.appendChild(input);
-    };
-
-    const addLot = (packageCard) => {
-      const packageIndex = packageCard.dataset.packageIndex;
-      const countInput = packageCard.querySelector(".lot-count");
-      const lotIndex = Number(countInput.value);
-      const html = lotTemplate.innerHTML
-        .replaceAll("__P__", packageIndex)
-        .replaceAll("__L__", lotIndex);
-      packageCard.querySelector(".lot-list").insertAdjacentHTML("beforeend", html);
-      countInput.value = lotIndex + 1;
+      container.appendChild(input);
     };
 
     const addPackage = () => {
@@ -173,57 +157,60 @@ document.addEventListener("DOMContentLoaded", () => {
       const html = packageTemplate.innerHTML.replaceAll("__P__", packageIndex);
       packagesContainer.insertAdjacentHTML("beforeend", html);
       packageCount.value = packageIndex + 1;
-      const newCard = packagesContainer.querySelector(
-        `.package-editor[data-package-index="${packageIndex}"]`
-      );
-      addLot(newCard);
-      relabelPackages();
     };
 
+    const updateReceivedLimit = (row) => {
+      const ordered = row.querySelector('input[name$="-cantidad_inicial"]');
+      const received = row.querySelector('input[name$="-cantidad_recibida"]');
+      if (!ordered || !received) return;
+      const maximum = Math.max(0, Number(ordered.value) || 0);
+      received.max = maximum;
+    };
+
+    const addProduct = () => {
+      const productIndex = Number(productCount.value);
+      productsContainer.insertAdjacentHTML(
+        "beforeend",
+        productTemplate.innerHTML.replaceAll("__I__", productIndex)
+      );
+      productCount.value = productIndex + 1;
+      updateReceivedLimit(
+        productsContainer.querySelector(
+          `.order-product-line[data-product-index="${productIndex}"]`
+        )
+      );
+    };
+
+    document.querySelector("#add-package-code").addEventListener("click", addPackage);
+    document.querySelector("#add-order-product").addEventListener("click", addProduct);
+
     packagesContainer.addEventListener("click", (event) => {
-      const addButton = event.target.closest(".add-lot");
-      if (addButton) {
-        addLot(addButton.closest(".package-editor"));
-        return;
-      }
-
-      const removeLine = event.target.closest(".remove-line");
-      if (removeLine) {
-        const card = removeLine.closest(".package-editor");
-        if (card.querySelectorAll(".lot-row").length <= 1) return;
-        const row = removeLine.closest(".lot-row");
-        markDeleted(
-          `lote-${card.dataset.packageIndex}-${row.dataset.lotIndex}-DELETE`
-        );
-        row.remove();
-        return;
-      }
-
-      const removePackage = event.target.closest(".remove-package");
-      if (removePackage) {
-        if (packagesContainer.querySelectorAll(".package-editor").length <= 1) return;
-        const card = removePackage.closest(".package-editor");
-        markDeleted(`paquete-${card.dataset.packageIndex}-DELETE`);
-        card.remove();
-        relabelPackages();
-      }
+      const button = event.target.closest(".remove-package-code");
+      if (!button || packagesContainer.children.length <= 1) return;
+      const row = button.closest(".tracking-code-row");
+      markDeleted(
+        `paquete-${row.dataset.packageIndex}-DELETE`,
+        packageDeletions
+      );
+      row.remove();
     });
 
-    packageDesired.addEventListener("change", () => {
-      const desired = Math.max(1, Math.min(20, Number(packageDesired.value) || 1));
-      let cards = [...packagesContainer.querySelectorAll(".package-editor")];
-      while (cards.length < desired) {
-        addPackage();
-        cards = [...packagesContainer.querySelectorAll(".package-editor")];
-      }
-      while (cards.length > desired) {
-        const card = cards.pop();
-        markDeleted(`paquete-${card.dataset.packageIndex}-DELETE`);
-        card.remove();
-      }
-      relabelPackages();
+    productsContainer.addEventListener("click", (event) => {
+      const button = event.target.closest(".remove-order-product");
+      if (!button || productsContainer.children.length <= 1) return;
+      const row = button.closest(".order-product-line");
+      markDeleted(
+        `producto-${row.dataset.productIndex}-DELETE`,
+        productDeletions
+      );
+      row.remove();
     });
-    relabelPackages();
+    productsContainer.addEventListener("input", (event) => {
+      if (event.target.matches('input[name$="-cantidad_inicial"]')) {
+        updateReceivedLimit(event.target.closest(".order-product-line"));
+      }
+    });
+    productsContainer.querySelectorAll(".order-product-line").forEach(updateReceivedLimit);
   }
 
   const saleForm = document.querySelector("#sale-form");

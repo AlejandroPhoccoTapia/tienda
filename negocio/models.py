@@ -69,8 +69,6 @@ class Paquete(models.Model):
     codigo_seguimiento = models.CharField(
         max_length=150, unique=True, null=True, blank=True
     )
-    entregado = models.BooleanField(default=False)
-    fecha_entrega = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["id"]
@@ -80,13 +78,14 @@ class Paquete(models.Model):
 
 
 class InventarioLote(models.Model):
-    paquete = models.ForeignKey(
-        Paquete, on_delete=models.CASCADE, related_name="lotes"
+    pedido = models.ForeignKey(
+        Pedido, on_delete=models.CASCADE, related_name="lotes"
     )
     producto = models.ForeignKey(
         Producto, on_delete=models.PROTECT, related_name="lotes"
     )
     cantidad_inicial = models.PositiveIntegerField()
+    cantidad_recibida = models.PositiveIntegerField(default=0)
     costo_unitario_dolar = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True
     )
@@ -95,6 +94,12 @@ class InventarioLote(models.Model):
 
     class Meta:
         ordering = ["id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(cantidad_recibida__lte=models.F("cantidad_inicial")),
+                name="inventario_recibido_no_supera_pedido",
+            )
+        ]
         verbose_name = "lote de inventario"
         verbose_name_plural = "lotes de inventario"
 

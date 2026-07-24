@@ -24,6 +24,7 @@ from django.utils import timezone
 from .forms import (
     ClienteForm,
     DetalleVentaForm,
+    InventarioRecibidoForm,
     LotePedidoForm,
     MarcaForm,
     PaquetePedidoForm,
@@ -135,17 +136,14 @@ def productos(request):
     tipo_id = request.GET.get("tipo", "")
 
     entradas = (
-        InventarioLote.objects.filter(
-            producto_id=OuterRef("pk"), paquete__entregado=True
-        )
+        InventarioLote.objects.filter(producto_id=OuterRef("pk"))
         .values("producto_id")
-        .annotate(total=Sum("cantidad_inicial"))
+        .annotate(total=Sum("cantidad_recibida"))
         .values("total")
     )
     salidas = (
         SalidaInventario.objects.filter(
             inventario_lote__producto_id=OuterRef("pk"),
-            inventario_lote__paquete__entregado=True,
         )
         .values("inventario_lote__producto_id")
         .annotate(total=Sum("cantidad"))
@@ -221,31 +219,45 @@ def producto_eliminar(request, producto_id):
 
 
 def pedidos(request, contexto_creacion=None, pedido_abierto=None):
-    items = (
-        Pedido.objects.prefetch_related(
-            "paquetes__lotes__producto__marca",
-            "paquetes__lotes__producto__tipo_producto",
+    productos_del_pedido = (
+        InventarioLote.objects.select_related(
+            "producto", "producto__marca", "producto__tipo_producto"
         )
         .annotate(
-            total_paquetes=Count("paquetes", distinct=True),
-            paquetes_entregados=Count(
-                "paquetes", filter=Q(paquetes__entregado=True), distinct=True
-            ),
-            total_unidades=Coalesce(
-                Sum("paquetes__lotes__cantidad_inicial"),
-                Value(0),
-                output_field=IntegerField(),
+            cantidad_vendida=Coalesce(
+                Sum("salidas__cantidad"), Value(0), output_field=IntegerField()
+            )
+        )
+        .order_by("id")
+    )
+    items = (
+        Pedido.objects.prefetch_related(
+            "paquetes",
+            Prefetch(
+                "lotes",
+                queryset=productos_del_pedido,
+                to_attr="productos_pedido",
             ),
         )
     )
     for pedido in items:
+        pedido.total_paquetes = len(pedido.paquetes.all())
+        pedido.total_unidades = sum(
+            (lote.cantidad_inicial for lote in pedido.productos_pedido), 0
+        )
+        pedido.total_recibidas = sum(
+            (lote.cantidad_recibida for lote in pedido.productos_pedido), 0
+        )
         pedido.costo_total = Decimal("0")
-        for paquete in pedido.paquetes.all():
-            for lote in paquete.lotes.all():
-                lote.costo_total = (
-                    Decimal(lote.cantidad_inicial) * lote.costo_unitario_soles
-                )
-                pedido.costo_total += lote.costo_total
+        for lote in pedido.productos_pedido:
+            lote.costo_total = (
+                Decimal(lote.cantidad_inicial) * lote.costo_unitario_soles
+            )
+            lote.stock_disponible = lote.cantidad_recibida - lote.cantidad_vendida
+            lote.form_recibidos = InventarioRecibidoForm(
+                instance=lote, prefix=f"recibido-{lote.id}"
+            )
+            pedido.costo_total += lote.costo_total
 
     if contexto_creacion is None:
         contexto_creacion = {
@@ -254,17 +266,17 @@ def pedidos(request, contexto_creacion=None, pedido_abierto=None):
                 {
                     "indice": 0,
                     "form": PaquetePedidoForm(prefix="paquete-0"),
-                    "lotes": [
-                        {
-                            "indice": 0,
-                            "form": LotePedidoForm(prefix="lote-0-0"),
-                        }
-                    ],
-                    "total_lotes": 1,
+                }
+            ],
+            "productos_pedido_form": [
+                {
+                    "indice": 0,
+                    "form": LotePedidoForm(prefix="producto-0"),
                 }
             ],
             "total_paquetes": 1,
             "paquetes_activos": 1,
+            "total_productos_pedido": 1,
             "formulario_pedido_abierto": request.GET.get("crear") == "1",
         }
     contexto_creacion["productos_disponibles"] = Producto.objects.all()
@@ -290,27 +302,28 @@ def pedido_crear(request):
                     {
                         "indice": 0,
                         "form": PaquetePedidoForm(prefix="paquete-0"),
-                        "lotes": [
-                            {
-                                "indice": 0,
-                                "form": LotePedidoForm(prefix="lote-0-0"),
-                            }
-                        ],
-                        "total_lotes": 1,
+                    }
+                ],
+                "productos_pedido_form": [
+                    {
+                        "indice": 0,
+                        "form": LotePedidoForm(prefix="producto-0"),
                     }
                 ],
                 "total_paquetes": 1,
                 "paquetes_activos": 1,
+                "total_productos_pedido": 1,
                 "formulario_pedido_abierto": True,
             },
         )
 
-    if request.method == "POST":
-        form = PedidoForm(request.POST)
-        total_paquetes = _entero_acotado(request.POST.get("package_count"), 1, 1, 20)
-    else:
-        form = PedidoForm(initial={"fecha": timezone.localtime()})
-        total_paquetes = 1
+    form = PedidoForm(request.POST)
+    total_paquetes = _entero_acotado(
+        request.POST.get("package_count"), 1, 1, 20
+    )
+    total_productos = _entero_acotado(
+        request.POST.get("product_count"), 1, 1, 100
+    )
 
     paquetes = []
     for paquete_indice in range(total_paquetes):
@@ -320,93 +333,81 @@ def pedido_crear(request):
         ):
             continue
         paquete_form = PaquetePedidoForm(
-            request.POST or None, prefix=f"paquete-{paquete_indice}"
+            request.POST, prefix=f"paquete-{paquete_indice}"
         )
-        total_lotes = (
-            _entero_acotado(
-                request.POST.get(f"lote-{paquete_indice}-count"), 1, 1, 50
-            )
-            if request.method == "POST"
-            else 1
-        )
-        lotes = []
-        for lote_indice in range(total_lotes):
-            if (
-                request.method == "POST"
-                and request.POST.get(
-                    f"lote-{paquete_indice}-{lote_indice}-DELETE"
-                )
-                == "1"
-            ):
-                continue
-            lotes.append(
-                {
-                    "indice": lote_indice,
-                    "form": LotePedidoForm(
-                        request.POST or None,
-                        prefix=f"lote-{paquete_indice}-{lote_indice}",
-                    ),
-                }
-            )
         paquetes.append(
             {
                 "indice": paquete_indice,
                 "form": paquete_form,
-                "lotes": lotes,
-                "total_lotes": total_lotes,
             }
         )
 
-    if request.method == "POST":
-        formularios_validos = form.is_valid() and bool(paquetes)
-        if not paquetes:
-            form.add_error(None, "El pedido debe contener al menos un paquete.")
-        codigos = set()
-        for paquete in paquetes:
-            paquete_valido = paquete["form"].is_valid()
-            lotes_validos = bool(paquete["lotes"])
-            if not paquete["lotes"]:
-                paquete["form"].add_error(
-                    None, "Cada paquete debe contener al menos un producto."
-                )
-            for lote in paquete["lotes"]:
-                lotes_validos = lote["form"].is_valid() and lotes_validos
-            codigo = paquete["form"].cleaned_data.get("codigo_seguimiento")
-            if paquete_valido and codigo:
-                if codigo in codigos:
-                    paquete["form"].add_error(
-                        "codigo_seguimiento",
-                        "Este código está repetido dentro del pedido.",
-                    )
-                    paquete_valido = False
-                codigos.add(codigo)
-            formularios_validos = (
-                formularios_validos and paquete_valido and lotes_validos
-            )
+    productos_pedido_form = []
+    for producto_indice in range(total_productos):
+        if request.POST.get(f"producto-{producto_indice}-DELETE") == "1":
+            continue
+        productos_pedido_form.append(
+            {
+                "indice": producto_indice,
+                "form": LotePedidoForm(
+                    request.POST,
+                    prefix=f"producto-{producto_indice}",
+                ),
+            }
+        )
 
-        if formularios_validos:
-            with transaction.atomic():
-                pedido = form.save()
-                for paquete in paquetes:
-                    paquete_objeto = paquete["form"].save(commit=False)
-                    paquete_objeto.pedido = pedido
-                    paquete_objeto.save()
-                    for lote_fila in paquete["lotes"]:
-                        lote_objeto = lote_fila["form"].save(commit=False)
-                        lote_objeto.paquete = paquete_objeto
-                        lote_objeto.save()
-            messages.success(
-                request, f"Registro de paquetería #{pedido.id} creado correctamente."
-            )
-            return redirect("negocio:pedido_detalle", pedido_id=pedido.id)
+    formularios_validos = (
+        form.is_valid() and bool(paquetes) and bool(productos_pedido_form)
+    )
+    if not paquetes:
+        form.add_error(None, "El pedido debe contener al menos un código de paquete.")
+    if not productos_pedido_form:
+        form.add_error(None, "El pedido debe contener al menos un producto.")
+
+    codigos = set()
+    for paquete in paquetes:
+        paquete_valido = paquete["form"].is_valid()
+        codigo = paquete["form"].cleaned_data.get("codigo_seguimiento")
+        if paquete_valido and codigo:
+            if codigo in codigos:
+                paquete["form"].add_error(
+                    "codigo_seguimiento",
+                    "Este código está repetido dentro del pedido.",
+                )
+                paquete_valido = False
+            codigos.add(codigo)
+        formularios_validos = formularios_validos and paquete_valido
+
+    for producto_fila in productos_pedido_form:
+        formularios_validos = (
+            producto_fila["form"].is_valid() and formularios_validos
+        )
+
+    if formularios_validos:
+        with transaction.atomic():
+            pedido = form.save()
+            for paquete in paquetes:
+                paquete_objeto = paquete["form"].save(commit=False)
+                paquete_objeto.pedido = pedido
+                paquete_objeto.save()
+            for producto_fila in productos_pedido_form:
+                lote_objeto = producto_fila["form"].save(commit=False)
+                lote_objeto.pedido = pedido
+                lote_objeto.save()
+        messages.success(
+            request, f"Registro de paquetería #{pedido.id} creado correctamente."
+        )
+        return redirect("negocio:pedido_detalle", pedido_id=pedido.id)
 
     return pedidos(
         request,
         {
             "form": form,
             "paquetes": paquetes,
+            "productos_pedido_form": productos_pedido_form,
             "total_paquetes": total_paquetes,
             "paquetes_activos": len(paquetes),
+            "total_productos_pedido": total_productos,
             "formulario_pedido_abierto": True,
         },
     )
@@ -442,6 +443,30 @@ def pedido_eliminar(request, pedido_id):
 def pedido_detalle(request, pedido_id):
     get_object_or_404(Pedido, pk=pedido_id)
     return pedidos(request, pedido_abierto=str(pedido_id))
+
+
+def pedido_producto_recibido_actualizar(request, lote_id):
+    lote = get_object_or_404(InventarioLote, pk=lote_id)
+    if request.method == "POST":
+        form = InventarioRecibidoForm(
+            request.POST,
+            instance=lote,
+            prefix=f"recibido-{lote.id}",
+        )
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                f"Recibidos de “{lote.producto.nombre}” actualizados.",
+            )
+        else:
+            messages.error(
+                request,
+                _primer_error_formulario(
+                    form, "No se pudo actualizar la cantidad recibida."
+                ),
+            )
+    return redirect("negocio:pedido_detalle", pedido_id=lote.pedido_id)
 
 
 def catalogos(request):

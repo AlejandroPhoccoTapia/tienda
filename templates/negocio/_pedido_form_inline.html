@@ -2,7 +2,7 @@
   <div class="inline-panel-heading">
     <div>
       <p class="eyebrow">Nuevo registro</p>
-      <h2>Registrar compra y paquetes</h2>
+      <h2>Registrar pedido</h2>
     </div>
     <button class="icon-close" type="button" data-close-panel="new-order-panel" aria-label="Cerrar">×</button>
   </div>
@@ -10,7 +10,9 @@
   <form class="workflow-form" id="order-form" action="{% url 'negocio:pedido_crear' %}" method="post" novalidate>
     {% csrf_token %}
     <input type="hidden" name="package_count" id="package-count" value="{{ total_paquetes }}">
+    <input type="hidden" name="product_count" id="order-product-count" value="{{ total_productos_pedido }}">
     <div id="package-deletions"></div>
+    <div id="order-product-deletions"></div>
 
     {% if form.non_field_errors %}<div class="form-alert">{{ form.non_field_errors }}</div>{% endif %}
     <div class="compact-order-fields">
@@ -23,51 +25,43 @@
       {% endfor %}
     </div>
 
-    <div class="inline-panel-subheading">
-      <div><strong>Paquetes del pedido</strong><small>Divide la compra y registra los productos de cada paquete.</small></div>
-      <label class="package-quantity">
-        <span>Número de paquetes</span>
-        <input type="number" id="package-desired" min="1" max="20" value="{{ paquetes_activos }}">
-      </label>
-    </div>
+    <div class="order-form-sections">
+      <section class="order-form-block">
+        <div class="inline-panel-subheading">
+          <div><strong>Códigos de paquetes</strong><small>Solo identifican los paquetes que pertenecen a este pedido.</small></div>
+          <button class="button small ghost" id="add-package-code" type="button">+ Código</button>
+        </div>
+        <div class="tracking-code-list" id="package-codes-container">
+          {% for paquete in paquetes %}
+            <div class="tracking-code-row" data-package-index="{{ paquete.indice }}">
+              {% for field in paquete.form %}
+                <label><span>{{ field.label }}</span>{{ field }}{% for error in field.errors %}<em>{{ error }}</em>{% endfor %}</label>
+              {% endfor %}
+              <button class="remove-line remove-package-code" type="button" aria-label="Quitar código">×</button>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
 
-    <div id="packages-container">
-      {% for paquete in paquetes %}
-        <article class="package-editor" data-package-index="{{ paquete.indice }}">
-          <header>
-            <div><span>Paquete</span><h3>Paquete <b class="package-label">{{ forloop.counter }}</b></h3></div>
-            <button class="icon-button danger-text remove-package" type="button">Eliminar paquete</button>
-          </header>
-          {% if paquete.form.non_field_errors %}<div class="form-alert">{{ paquete.form.non_field_errors }}</div>{% endif %}
-          <div class="package-fields">
-            {% for field in paquete.form %}
-              <label class="{% if field.name == 'entregado' %}checkbox-field{% endif %}">
-                {% if field.name == "entregado" %}{{ field }} <span>{{ field.label }}</span>{% else %}<span>{{ field.label }}</span>{{ field }}{% endif %}
-                {% for error in field.errors %}<em>{{ error }}</em>{% endfor %}
-              </label>
-            {% endfor %}
-          </div>
-
-          <input type="hidden" name="lote-{{ paquete.indice }}-count" class="lot-count" value="{{ paquete.total_lotes }}">
-          <div class="lot-heading">
-            <h4>Productos de este paquete</h4>
-            <button class="button small ghost add-lot" type="button">+ Agregar producto</button>
-          </div>
-          <div class="lot-list">
-            {% for lote in paquete.lotes %}
-              <div class="lot-row" data-lot-index="{{ lote.indice }}">
-                {% for field in lote.form %}
-                  <label class="{% if field.name == 'costo_soles_manual' %}checkbox-field compact{% endif %}">
-                    {% if field.name == "costo_soles_manual" %}{{ field }} <span>{{ field.label }}</span>{% else %}<span>{{ field.label }}</span>{{ field }}{% endif %}
-                    {% for error in field.errors %}<em>{{ error }}</em>{% endfor %}
-                  </label>
-                {% endfor %}
-                <button class="remove-line" type="button" aria-label="Quitar producto">×</button>
-              </div>
-            {% endfor %}
-          </div>
-        </article>
-      {% endfor %}
+      <section class="order-form-block">
+        <div class="inline-panel-subheading">
+          <div><strong>Productos del pedido</strong><small>Cada producto controla cuánto se pidió y cuánto se recibió.</small></div>
+          <button class="button small ghost" id="add-order-product" type="button">+ Producto</button>
+        </div>
+        <div class="order-product-list" id="order-products-container">
+          {% for producto_fila in productos_pedido_form %}
+            <div class="order-product-line" data-product-index="{{ producto_fila.indice }}">
+              {% for field in producto_fila.form %}
+                <label class="{% if field.name == 'costo_soles_manual' %}checkbox-field compact{% endif %}">
+                  {% if field.name == "costo_soles_manual" %}{{ field }} <span>{{ field.label }}</span>{% else %}<span>{{ field.label }}</span>{{ field }}{% endif %}
+                  {% for error in field.errors %}<em>{{ error }}</em>{% endfor %}
+                </label>
+              {% endfor %}
+              <button class="remove-line remove-order-product" type="button" aria-label="Quitar producto">×</button>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
     </div>
 
     <div class="inline-form-actions">
@@ -77,30 +71,21 @@
   </form>
 </section>
 
-<template id="package-template">
-  <article class="package-editor" data-package-index="__P__">
-    <header>
-      <div><span>Paquete</span><h3>Paquete <b class="package-label"></b></h3></div>
-      <button class="icon-button danger-text remove-package" type="button">Eliminar paquete</button>
-    </header>
-    <div class="package-fields">
-      <label><span>Código de seguimiento</span><input type="text" name="paquete-__P__-codigo_seguimiento" maxlength="150" placeholder="Opcional"></label>
-      <label class="checkbox-field"><input type="checkbox" name="paquete-__P__-entregado"><span>Paquete entregado</span></label>
-      <label><span>Fecha de entrega</span><input type="datetime-local" name="paquete-__P__-fecha_entrega"></label>
-    </div>
-    <input type="hidden" name="lote-__P__-count" class="lot-count" value="0">
-    <div class="lot-heading"><h4>Productos de este paquete</h4><button class="button small ghost add-lot" type="button">+ Agregar producto</button></div>
-    <div class="lot-list"></div>
-  </article>
+<template id="package-code-template">
+  <div class="tracking-code-row" data-package-index="__P__">
+    <label><span>Código de seguimiento</span><input type="text" name="paquete-__P__-codigo_seguimiento" maxlength="150" placeholder="Ej. USPS-9400" required></label>
+    <button class="remove-line remove-package-code" type="button" aria-label="Quitar código">×</button>
+  </div>
 </template>
 
-<template id="lot-template">
-  <div class="lot-row" data-lot-index="__L__">
-    <label><span>Producto</span><select name="lote-__P__-__L__-producto" required><option value="">Selecciona</option>{% for producto in productos_disponibles %}<option value="{{ producto.id }}">{{ producto.nombre }}</option>{% endfor %}</select></label>
-    <label><span>Cantidad</span><input type="number" name="lote-__P__-__L__-cantidad_inicial" min="1" step="1" required></label>
-    <label><span>Costo unitario US$</span><input type="number" name="lote-__P__-__L__-costo_unitario_dolar" min="0" step="0.01" placeholder="0.00"></label>
-    <label><span>Costo unitario S/</span><input type="number" name="lote-__P__-__L__-costo_unitario_soles" min="0" step="0.01" placeholder="0.00" required></label>
-    <label class="checkbox-field compact"><input type="checkbox" name="lote-__P__-__L__-costo_soles_manual" checked><span>Costo en soles manual</span></label>
-    <button class="remove-line" type="button" aria-label="Quitar producto">×</button>
+<template id="order-product-template">
+  <div class="order-product-line" data-product-index="__I__">
+    <label><span>Producto</span><select name="producto-__I__-producto" required><option value="">Selecciona</option>{% for producto in productos_disponibles %}<option value="{{ producto.id }}">{{ producto.nombre }}</option>{% endfor %}</select></label>
+    <label><span>Cantidad pedida</span><input type="number" name="producto-__I__-cantidad_inicial" min="1" step="1" required></label>
+    <label><span>Cantidad recibida</span><input type="number" name="producto-__I__-cantidad_recibida" min="0" step="1" value="0" required></label>
+    <label><span>Costo unitario US$</span><input type="number" name="producto-__I__-costo_unitario_dolar" min="0" step="0.01" placeholder="0.00"></label>
+    <label><span>Costo unitario S/</span><input type="number" name="producto-__I__-costo_unitario_soles" min="0" step="0.01" placeholder="0.00" required></label>
+    <label class="checkbox-field compact"><input type="checkbox" name="producto-__I__-costo_soles_manual" checked><span>Costo en soles manual</span></label>
+    <button class="remove-line remove-order-product" type="button" aria-label="Quitar producto">×</button>
   </div>
 </template>

@@ -24,7 +24,7 @@ def lotes_con_stock(incluir_lote_id=None, cantidad_reintegrada=0):
     )
     return (
         InventarioLote.objects.select_related(
-            "producto", "paquete", "paquete__pedido"
+            "producto", "pedido"
         )
         .annotate(
             cantidad_usada=Coalesce(
@@ -32,10 +32,10 @@ def lotes_con_stock(incluir_lote_id=None, cantidad_reintegrada=0):
             )
         )
         .annotate(
-            stock_disponible=F("cantidad_inicial") - F("cantidad_usada") + reintegro
+            stock_disponible=F("cantidad_recibida") - F("cantidad_usada") + reintegro
         )
-        .filter(paquete__entregado=True, stock_disponible__gt=0)
-        .order_by("producto__nombre", "paquete__pedido__fecha", "id")
+        .filter(stock_disponible__gt=0)
+        .order_by("producto__nombre", "pedido__fecha", "id")
     )
 
 
@@ -128,22 +128,19 @@ class ProductoForm(forms.ModelForm):
 class PaquetePedidoForm(forms.ModelForm):
     class Meta:
         model = Paquete
-        fields = ["codigo_seguimiento", "entregado", "fecha_entrega"]
+        fields = ["codigo_seguimiento"]
         labels = {
             "codigo_seguimiento": "Código de seguimiento",
-            "entregado": "Paquete entregado",
-            "fecha_entrega": "Fecha de entrega",
         }
         widgets = {
             "codigo_seguimiento": forms.TextInput(
                 attrs={"placeholder": "Opcional, ej. USPS-9400"}
             ),
-            "fecha_entrega": DateTimeLocalInput(format="%Y-%m-%dT%H:%M"),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["fecha_entrega"].input_formats = ["%Y-%m-%dT%H:%M"]
+        self.fields["codigo_seguimiento"].required = True
 
 
 class LotePedidoForm(forms.ModelForm):
@@ -152,19 +149,22 @@ class LotePedidoForm(forms.ModelForm):
         fields = [
             "producto",
             "cantidad_inicial",
+            "cantidad_recibida",
             "costo_unitario_dolar",
             "costo_unitario_soles",
             "costo_soles_manual",
         ]
         labels = {
             "producto": "Producto",
-            "cantidad_inicial": "Cantidad",
+            "cantidad_inicial": "Cantidad pedida",
+            "cantidad_recibida": "Cantidad recibida",
             "costo_unitario_dolar": "Costo unitario US$",
             "costo_unitario_soles": "Costo unitario S/",
             "costo_soles_manual": "Costo en soles ingresado manualmente",
         }
         widgets = {
             "cantidad_inicial": forms.NumberInput(attrs={"min": "1", "step": "1"}),
+            "cantidad_recibida": forms.NumberInput(attrs={"min": "0", "step": "1"}),
             "costo_unitario_dolar": forms.NumberInput(
                 attrs={"min": "0", "step": "0.01", "placeholder": "0.00"}
             ),
@@ -172,6 +172,42 @@ class LotePedidoForm(forms.ModelForm):
                 attrs={"min": "0", "step": "0.01", "placeholder": "0.00"}
             ),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        pedida = cleaned_data.get("cantidad_inicial")
+        recibida = cleaned_data.get("cantidad_recibida")
+        if pedida is not None and recibida is not None and recibida > pedida:
+            self.add_error(
+                "cantidad_recibida",
+                "La cantidad recibida no puede superar la cantidad pedida.",
+            )
+        return cleaned_data
+
+
+class InventarioRecibidoForm(forms.ModelForm):
+    class Meta:
+        model = InventarioLote
+        fields = ["cantidad_recibida"]
+        labels = {"cantidad_recibida": "Recibidos"}
+        widgets = {
+            "cantidad_recibida": forms.NumberInput(attrs={"min": "0", "step": "1"})
+        }
+
+    def clean_cantidad_recibida(self):
+        recibida = self.cleaned_data["cantidad_recibida"]
+        if recibida > self.instance.cantidad_inicial:
+            raise forms.ValidationError(
+                "No puede superar la cantidad pedida."
+            )
+        vendida = self.instance.salidas.aggregate(
+            total=Coalesce(Sum("cantidad"), Value(0), output_field=IntegerField())
+        )["total"]
+        if recibida < vendida:
+            raise forms.ValidationError(
+                f"No puede ser menor que las {vendida} unidades ya vendidas."
+            )
+        return recibida
 
 
 class VentaForm(forms.ModelForm):
