@@ -419,6 +419,8 @@ class VistasNegocioTests(TestCase):
         self.assertContains(response, 'id="new-sale-panel"')
         self.assertContains(response, 'class="sale-card')
         self.assertNotContains(response, 'class="sales-table"')
+        self.assertNotContains(response, f"<strong>#{self.venta_julio.id}</strong>")
+        self.assertContains(response, self.venta_julio.fecha.strftime("%H:%M"))
 
     def test_edita_los_datos_necesarios_de_venta_inline(self):
         response = self.client.post(

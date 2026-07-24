@@ -602,7 +602,7 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
 .sales-list { display: grid; gap: 12px; }
 .sale-card {
   display: grid;
-  grid-template-columns: minmax(650px, 1.7fr) minmax(400px, 1fr);
+  grid-template-columns: minmax(680px, 1.75fr) minmax(370px, .95fr);
   align-items: stretch;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -612,7 +612,7 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
 }
 .sale-card-summary {
   display: grid;
-  grid-template-columns: 100px minmax(145px, 1.5fr) minmax(115px, .9fr) 100px 132px;
+  grid-template-columns: 120px minmax(140px, 1.5fr) minmax(110px, .9fr) 95px 132px;
   gap: 10px;
   align-items: center;
   padding: 11px 14px;
