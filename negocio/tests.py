@@ -364,12 +364,12 @@ class VistasNegocioTests(TestCase):
         self.assertContains(response, "Solo hay 7 unidades disponibles")
         self.assertFalse(Venta.objects.filter(direccion_entrega="Venta imposible").exists())
 
-    def test_selector_de_venta_muestra_lote_costo_y_stock(self):
+    def test_selector_de_venta_muestra_producto_costo_y_stock_compactos(self):
         response = self.client.get(reverse("negocio:venta_crear"))
         self.assertContains(response, "Producto A")
-        self.assertContains(response, f"Lote #{self.lote.id}")
-        self.assertContains(response, "Costo S/ 20.00")
-        self.assertContains(response, "Disponible: 7")
+        self.assertNotContains(response, f"Lote #{self.lote.id}")
+        self.assertContains(response, "S/20.00")
+        self.assertContains(response, "Stock 7")
 
     def test_selector_de_venta_excluye_lotes_no_entregados(self):
         pedido = Pedido.objects.create(

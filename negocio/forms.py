@@ -55,11 +55,10 @@ class LoteSelect(forms.Select):
 
 class LoteChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, lote):
-        codigo = lote.paquete.codigo_seguimiento or f"Paquete #{lote.paquete_id}"
         return (
-            f"{lote.producto.nombre} · Lote #{lote.id} ({codigo}) · "
-            f"Costo S/ {lote.costo_unitario_soles:.2f} · "
-            f"Disponible: {lote.stock_disponible}"
+            f"{lote.producto.nombre} · "
+            f"S/{lote.costo_unitario_soles:.2f} · "
+            f"Stock {lote.stock_disponible}"
         )
 
 
@@ -265,8 +264,8 @@ class VentaEditarForm(forms.ModelForm):
 class DetalleVentaForm(forms.ModelForm):
     inventario_lote = LoteChoiceField(
         queryset=InventarioLote.objects.none(),
-        label="Producto y lote",
-        empty_label="Selecciona un lote con stock",
+        label="Producto",
+        empty_label="Selecciona un producto",
         widget=LoteSelect,
     )
     comision_karen = forms.DecimalField(
@@ -328,7 +327,7 @@ class DetalleVentaForm(forms.ModelForm):
         if lote and cantidad and cantidad > lote.stock_disponible:
             self.add_error(
                 "cantidad",
-                f"Solo hay {lote.stock_disponible} unidades disponibles en este lote.",
+                f"Solo hay {lote.stock_disponible} unidades disponibles de esta opción.",
             )
         return cleaned_data
 

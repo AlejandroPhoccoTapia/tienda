@@ -7,12 +7,9 @@
     <h1>Ventas realizadas</h1>
     <p class="subtitle">Toda la información visible, sin desplazarte hacia los costados.</p>
   </div>
-  <div class="heading-actions">
-    <span class="count-pill">{{ ventas|length }} venta{{ ventas|length|pluralize }}</span>
-    <button class="button primary" type="button" data-panel-target="new-sale-panel">+ Nueva venta</button>
-  </div>
 </section>
 
+<div class="sales-workspace">
 <section class="inline-sale-creator" id="new-sale-panel" {% if not formulario_venta_abierto %}hidden{% endif %}>
   <div class="inline-panel-heading">
     <div>
@@ -39,7 +36,7 @@
       {% endfor %}
     </div>
     <div class="inline-panel-subheading">
-      <div><strong>Productos</strong><small>Selecciona el lote exacto para respetar el stock.</small></div>
+      <div><strong>Productos</strong><small>El costo y el stock corresponden a la compra disponible.</small></div>
       <button class="button small ghost" id="add-sale-line" type="button">+ Agregar fila</button>
     </div>
     <div id="sale-lines" class="sale-lines compact-lines">
@@ -48,7 +45,7 @@
           {% for field in detalle.form %}
             <label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}">
               <span>{{ field.label }}</span>{{ field }}
-              {% if field.name == "inventario_lote" %}<small class="lot-stock-hint">Selecciona un lote para ver el límite.</small>{% endif %}
+              {% if field.name == "inventario_lote" %}<small class="lot-stock-hint">Selecciona un producto para ver costo y stock.</small>{% endif %}
               {% for error in field.errors %}<em>{{ error }}</em>{% endfor %}
             </label>
           {% endfor %}
@@ -65,7 +62,7 @@
 
 <template id="sale-line-template">
   <div class="sale-line" data-detail-index="__D__">
-    <label class="lot-select-field"><span>Producto y lote</span><select name="detalle-__D__-inventario_lote" required><option value="">Selecciona un lote con stock</option>{% for lote in lotes_disponibles %}<option value="{{ lote.id }}" data-stock="{{ lote.stock_disponible }}" data-cost="{{ lote.costo_unitario_soles|floatformat:2 }}">{{ lote.producto.nombre }} · Lote #{{ lote.id }} ({{ lote.paquete.codigo_seguimiento|default:"Sin seguimiento" }}) · Costo S/ {{ lote.costo_unitario_soles|floatformat:2 }} · Disponible: {{ lote.stock_disponible }}</option>{% endfor %}</select><small class="lot-stock-hint">Selecciona un lote para ver el límite.</small></label>
+    <label class="lot-select-field"><span>Producto</span><select name="detalle-__D__-inventario_lote" required><option value="">Selecciona un producto</option>{% for lote in lotes_disponibles %}<option value="{{ lote.id }}" data-stock="{{ lote.stock_disponible }}" data-cost="{{ lote.costo_unitario_soles|floatformat:2 }}">{{ lote.producto.nombre }} · S/{{ lote.costo_unitario_soles|floatformat:2 }} · Stock {{ lote.stock_disponible }}</option>{% endfor %}</select><small class="lot-stock-hint">Selecciona un producto para ver costo y stock.</small></label>
     <label><span>Cantidad</span><input type="number" name="detalle-__D__-cantidad" min="1" step="1" required></label>
     <label><span>Precio unitario S/</span><input type="number" name="detalle-__D__-precio_unitario_venta" min="0" step="0.01" placeholder="0.00" required></label>
     <label><span>Comisión Karen S/</span><input type="number" name="detalle-__D__-comision_karen" min="0" step="0.01" value="0"></label>
@@ -93,12 +90,18 @@
   {% if mes_seleccionado or pago_seleccionado or orden_seleccionado == "antigua" %}<a class="button ghost" href="{% url 'negocio:ventas' %}">Limpiar</a>{% endif %}
 </form>
 
+<div class="sales-list-toolbar">
+  <span class="count-pill">{{ ventas|length }} venta{{ ventas|length|pluralize }}</span>
+  <button class="button primary" type="button" data-panel-target="new-sale-panel">+ Nueva venta</button>
+</div>
+
 <section class="sales-summary" aria-label="Totales de las ventas filtradas">
   <article><span>Costo total</span><strong>S/ {{ resumen.costo_total|floatformat:2 }}</strong></article>
   <article><span>Precio de venta total</span><strong>S/ {{ resumen.precio_venta_total|floatformat:2 }}</strong></article>
   <article><span>Comisión de Karen</span><strong>S/ {{ resumen.comision_karen_total|floatformat:2 }}</strong></article>
   <article class="profit-summary {% if resumen.mi_ganancia_total < 0 %}negative{% endif %}"><span>Mi ganancia total</span><strong>S/ {{ resumen.mi_ganancia_total|floatformat:2 }}</strong></article>
 </section>
+</div>
 
 {% if ventas %}
   <section class="sales-list">
@@ -148,13 +151,13 @@
 
         <div class="sale-detail" id="sale-detail-{{ venta.id }}" {% if venta_abierta != venta.id|stringformat:'s' %}hidden{% endif %}>
           <div class="sale-products-toolbar">
-            <div><strong>Productos de la venta</strong><small>Edita únicamente lote, cantidad, precio o comisión.</small></div>
+            <div><strong>Productos de la venta</strong><small>Edita únicamente producto, cantidad, precio o comisión.</small></div>
             <button class="button tiny ghost" type="button" data-panel-target="add-product-{{ venta.id }}">+ Producto</button>
           </div>
 
           <form class="inline-edit-panel product-inline-form" id="add-product-{{ venta.id }}" action="{% url 'negocio:venta_producto_agregar' venta.id %}" method="post" hidden>
             {% csrf_token %}
-            {% for field in venta.form_producto_nuevo %}<label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.name == "inventario_lote" %}<small class="lot-stock-hint">Selecciona un lote para ver el límite.</small>{% endif %}</label>{% endfor %}
+            {% for field in venta.form_producto_nuevo %}<label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.name == "inventario_lote" %}<small class="lot-stock-hint">Selecciona un producto para ver costo y stock.</small>{% endif %}</label>{% endfor %}
             <div class="inline-edit-actions"><button class="button tiny ghost" type="button" data-close-panel="add-product-{{ venta.id }}">Cancelar</button><button class="button tiny primary" type="submit">Agregar</button></div>
           </form>
 
@@ -172,7 +175,7 @@
             </div>
             <form class="inline-edit-panel product-inline-form" id="edit-product-{{ detalle.id }}" action="{% url 'negocio:detalle_venta_editar' detalle.id %}" method="post" hidden>
               {% csrf_token %}
-              {% for field in detalle.form_edicion %}<label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.name == "inventario_lote" %}<small class="lot-stock-hint">El stock incluye las unidades actuales de esta fila.</small>{% endif %}</label>{% endfor %}
+              {% for field in detalle.form_edicion %}<label class="{% if field.name == 'inventario_lote' %}lot-select-field{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.name == "inventario_lote" %}<small class="lot-stock-hint">Costo y stock disponibles; incluye esta fila.</small>{% endif %}</label>{% endfor %}
               <div class="inline-edit-actions"><button class="button tiny ghost" type="button" data-close-panel="edit-product-{{ detalle.id }}">Cancelar</button><button class="button tiny primary" type="submit">Guardar</button></div>
             </form>
           {% empty %}

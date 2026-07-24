@@ -432,6 +432,24 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
   gap: 14px;
   margin-bottom: 24px;
 }
+.sales-workspace {
+  display: flex;
+  flex-direction: column;
+}
+.sales-workspace .sales-filters {
+  order: 1;
+  margin-bottom: 14px;
+}
+.sales-list-toolbar {
+  display: flex;
+  order: 2;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.sales-workspace .inline-sale-creator { order: 3; }
+.sales-workspace .sales-summary { order: 4; }
 .sales-summary article {
   padding: 18px 20px;
   border: 1px solid var(--line);

@@ -219,10 +219,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const stock = Number(option?.dataset.stock);
       if (option?.value && Number.isFinite(stock)) {
         quantity.max = stock;
-        hint.textContent = `Costo del lote: S/ ${option.dataset.cost} · Máximo disponible: ${stock}`;
+        hint.textContent = `Costo S/${option.dataset.cost} · Stock ${stock}`;
       } else {
         quantity.removeAttribute("max");
-        hint.textContent = "Selecciona un lote para ver el límite.";
+        hint.textContent = "Selecciona un producto para ver costo y stock.";
       }
     };
 
@@ -266,7 +266,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!quantity || !hint) return;
     if (option?.value && Number.isFinite(stock)) {
       quantity.max = stock;
-      hint.textContent = `Costo del lote: S/ ${option.dataset.cost} · Máximo disponible: ${stock}`;
+      hint.textContent = `Costo S/${option.dataset.cost} · Stock ${stock}`;
     } else {
       quantity.removeAttribute("max");
     }
