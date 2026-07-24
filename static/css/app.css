@@ -703,6 +703,11 @@ td small { display: block; max-width: 240px; margin-top: 4px; overflow: hidden; 
   margin: 0 0 11px;
 }
 .product-inline-form .lot-stock-hint { font-size: 9px; }
+.inline-sale-creator[hidden],
+.inline-edit-panel[hidden],
+.sale-detail[hidden] {
+  display: none !important;
+}
 
 .empty-state {
   padding: 64px 24px;
