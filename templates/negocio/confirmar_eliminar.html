@@ -1,0 +1,23 @@
+{% extends "negocio/base.html" %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+<section class="confirm-card">
+  <div class="danger-mark">!</div>
+  <p class="eyebrow">Confirmación requerida</p>
+  <h1>{{ titulo }}</h1>
+  <p>Estás por eliminar <strong>{{ nombre }}</strong>.</p>
+  <p class="confirm-description">{{ descripcion }}</p>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="confirm-actions">
+      {% if cancel_arg %}
+        <a class="button ghost" href="{% url cancel_url cancel_arg %}">Cancelar</a>
+      {% else %}
+        <a class="button ghost" href="{% url cancel_url %}">Cancelar</a>
+      {% endif %}
+      <button class="button danger" type="submit">Sí, eliminar</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

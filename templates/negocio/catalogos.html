@@ -1,0 +1,79 @@
+{% extends "negocio/base.html" %}
+{% block title %}Marcas y tipos{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Configuración</p>
+    <h1>Marcas y tipos</h1>
+    <p class="subtitle">Administra las opciones que utilizas para clasificar tus productos.</p>
+  </div>
+</section>
+
+<section class="catalog-grid">
+  <article class="catalog-card">
+    <header>
+      <div>
+        <p class="eyebrow">Catálogo</p>
+        <h2>Marcas</h2>
+      </div>
+      <span class="count-pill">{{ marcas|length }}</span>
+    </header>
+    <form class="inline-create" method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="formulario" value="marca">
+      <label>
+        <span>{{ marca_form.nombre.label }}</span>
+        {{ marca_form.nombre }}
+        {% for error in marca_form.nombre.errors %}<em>{{ error }}</em>{% endfor %}
+      </label>
+      <button class="button primary" type="submit">Agregar marca</button>
+    </form>
+    <div class="catalog-list">
+      {% for marca in marcas %}
+        <div>
+          <strong>{{ marca.nombre }}</strong>
+          <div class="catalog-actions">
+            <span>{{ marca.total_productos }} producto{{ marca.total_productos|pluralize }}</span>
+            <a class="danger-link" href="{% url 'negocio:marca_eliminar' marca.id %}">Eliminar</a>
+          </div>
+        </div>
+      {% empty %}
+        <p class="catalog-empty">Todavía no hay marcas.</p>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="catalog-card">
+    <header>
+      <div>
+        <p class="eyebrow">Catálogo</p>
+        <h2>Tipos de producto</h2>
+      </div>
+      <span class="count-pill">{{ tipos|length }}</span>
+    </header>
+    <form class="inline-create" method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="formulario" value="tipo">
+      <label>
+        <span>{{ tipo_form.nombre.label }}</span>
+        {{ tipo_form.nombre }}
+        {% for error in tipo_form.nombre.errors %}<em>{{ error }}</em>{% endfor %}
+      </label>
+      <button class="button primary" type="submit">Agregar tipo</button>
+    </form>
+    <div class="catalog-list">
+      {% for tipo in tipos %}
+        <div>
+          <strong>{{ tipo.nombre }}</strong>
+          <div class="catalog-actions">
+            <span>{{ tipo.total_productos }} producto{{ tipo.total_productos|pluralize }}</span>
+            <a class="danger-link" href="{% url 'negocio:tipo_eliminar' tipo.id %}">Eliminar</a>
+          </div>
+        </div>
+      {% empty %}
+        <p class="catalog-empty">Todavía no hay tipos.</p>
+      {% endfor %}
+    </div>
+  </article>
+</section>
+{% endblock %}

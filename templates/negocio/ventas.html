@@ -1,0 +1,73 @@
+{% extends "negocio/base.html" %}
+{% block title %}Ventas{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Actividad comercial</p>
+    <h1>Ventas realizadas</h1>
+    <p class="subtitle">Filtra por mes y método de pago, y elige cómo ordenar las fechas.</p>
+  </div>
+  <div class="heading-actions">
+    <span class="count-pill">{{ ventas|length }} venta{{ ventas|length|pluralize }}</span>
+    <a class="button primary" href="{% url 'negocio:venta_crear' %}">+ Nueva venta</a>
+  </div>
+</section>
+
+<form class="filter-bar sales-filters" method="get">
+  <label>
+    <span>Mes</span>
+    <input type="month" name="mes" value="{{ mes_seleccionado }}">
+  </label>
+  <label>
+    <span>Método de pago</span>
+    <select name="tipo_pago">
+      <option value="">Todos los métodos</option>
+      {% for tipo in tipos_pago %}
+        <option value="{{ tipo.id }}" {% if pago_seleccionado == tipo.id|stringformat:"s" %}selected{% endif %}>{{ tipo.nombre }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    <span>Ordenar fecha</span>
+    <select name="orden">
+      <option value="reciente" {% if orden_seleccionado == "reciente" %}selected{% endif %}>Más reciente primero</option>
+      <option value="antigua" {% if orden_seleccionado == "antigua" %}selected{% endif %}>Más antigua primero</option>
+    </select>
+  </label>
+  <button class="button primary" type="submit">Aplicar filtros</button>
+  {% if mes_seleccionado or pago_seleccionado or orden_seleccionado == "antigua" %}
+    <a class="button ghost" href="{% url 'negocio:ventas' %}">Limpiar</a>
+  {% endif %}
+</form>
+
+{% if ventas %}
+  <section class="table-card">
+    <div class="table-wrap">
+      <table class="sales-table">
+        <thead>
+          <tr><th>Venta</th><th>Fecha</th><th>Cliente</th><th>Pago</th><th>Estado</th><th>Unidades</th><th>Total</th></tr>
+        </thead>
+        <tbody>
+          {% for venta in ventas %}
+            <tr>
+              <td><strong>#{{ venta.id }}</strong></td>
+              <td>{{ venta.fecha|date:"d M Y" }}<small>{{ venta.fecha|date:"H:i" }}</small></td>
+              <td>{{ venta.cliente.nombre|default:"Cliente no registrado" }}<small>{{ venta.direccion_entrega|default:"Sin dirección" }}</small></td>
+              <td>{{ venta.tipo_pago.nombre }}<small>{% if venta.pagado %}Pago completo{% else %}Pendiente de pago{% endif %}</small></td>
+              <td><span class="status {% if venta.estado_entrega|lower == 'entregado' %}success{% else %}pending{% endif %}">{{ venta.estado_entrega }}</span></td>
+              <td>{{ venta.unidades }}</td>
+              <td><strong>S/ {{ venta.total|floatformat:2 }}</strong>{% if venta.descuento %}<small>Desc. S/ {{ venta.descuento|floatformat:2 }}</small>{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% else %}
+  <section class="empty-state">
+    <h2>No encontramos ventas</h2>
+    <p>Prueba con otro mes o método de pago.</p>
+    <a class="button primary" href="{% url 'negocio:ventas' %}">Ver todas</a>
+  </section>
+{% endif %}
+{% endblock %}

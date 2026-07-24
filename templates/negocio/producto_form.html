@@ -1,0 +1,52 @@
+{% extends "negocio/base.html" %}
+{% block title %}Nuevo producto{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'negocio:productos' %}">← Volver a productos</a>
+
+<section class="page-heading form-heading">
+  <div>
+    <p class="eyebrow">Inventario</p>
+    <h1>Crear producto</h1>
+    <p class="subtitle">Registra el producto y clasifícalo con una marca y un tipo.</p>
+  </div>
+</section>
+
+{% if sin_catalogos %}
+  <div class="form-notice">
+    ¿No encuentras una marca o un tipo?
+    <a href="{% url 'negocio:catalogos' %}">Agrégalos primero en Catálogos.</a>
+  </div>
+{% endif %}
+
+<form class="record-form" method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="form-alert">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="form-grid">
+    {% for field in form %}
+      <label class="{% if field.name == 'nombre' or field.name == 'link' or field.name == 'foto' %}field-wide{% endif %}">
+        <span>{{ field.label }}{% if field.field.required %} <b>*</b>{% endif %}</span>
+        {% if field.name == "foto" %}
+          <span class="drop-zone" id="photo-drop-zone">
+            {{ field }}
+            <span class="drop-icon">↑</span>
+            <strong>Arrastra una foto aquí</strong>
+            <small>o toca para seleccionarla · JPG, PNG, WEBP o GIF</small>
+            <img id="photo-preview" alt="Vista previa de la foto">
+          </span>
+        {% else %}
+          {{ field }}
+        {% endif %}
+        {% for error in field.errors %}<em>{{ error }}</em>{% endfor %}
+      </label>
+    {% endfor %}
+  </div>
+
+  <div class="form-actions">
+    <a class="button ghost" href="{% url 'negocio:productos' %}">Cancelar</a>
+    <button class="button primary" type="submit">Crear producto</button>
+  </div>
+</form>
+{% endblock %}

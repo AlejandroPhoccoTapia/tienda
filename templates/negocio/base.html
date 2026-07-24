@@ -1,0 +1,39 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Almacén{% endblock %} · Control de negocio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{% url 'negocio:productos' %}">
+      <span class="brand-mark">A</span>
+      <span>Almacén</span>
+    </a>
+    <nav aria-label="Navegación principal">
+      <a href="{% url 'negocio:productos' %}" {% if request.resolver_match.url_name == 'productos' or request.resolver_match.url_name == 'producto_crear' or request.resolver_match.url_name == 'producto_eliminar' %}class="active"{% endif %}>Productos</a>
+      <a href="{% url 'negocio:pedidos' %}" {% if request.resolver_match.url_name == 'pedidos' or request.resolver_match.url_name == 'pedido_detalle' or request.resolver_match.url_name == 'pedido_crear' %}class="active"{% endif %}>Pedidos</a>
+      <a href="{% url 'negocio:ventas' %}" {% if request.resolver_match.url_name == 'ventas' or request.resolver_match.url_name == 'venta_crear' %}class="active"{% endif %}>Ventas</a>
+      <a href="{% url 'negocio:catalogos' %}" {% if request.resolver_match.url_name == 'catalogos' %}class="active"{% endif %}>Catálogos</a>
+    </nav>
+  </header>
+
+  <main class="page-shell">
+    {% if messages %}
+      <div class="messages" aria-live="polite">
+        {% for message in messages %}
+          <div class="message {{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <script src="{% static 'js/forms.js' %}" defer></script>
+</body>
+</html>

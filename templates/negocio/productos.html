@@ -1,0 +1,78 @@
+{% extends "negocio/base.html" %}
+{% block title %}Productos{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Inventario</p>
+    <h1>Todos tus productos</h1>
+    <p class="subtitle">Consulta el catálogo y combina filtros por marca y tipo.</p>
+  </div>
+  <div class="heading-actions">
+    <span class="count-pill">{{ productos|length }} producto{{ productos|length|pluralize }}</span>
+    <a class="button primary" href="{% url 'negocio:producto_crear' %}">+ Nuevo producto</a>
+  </div>
+</section>
+
+<form class="filter-bar" method="get">
+  <label>
+    <span>Marca</span>
+    <select name="marca">
+      <option value="">Todas las marcas</option>
+      {% for marca in marcas %}
+        <option value="{{ marca.id }}" {% if marca_seleccionada == marca.id|stringformat:"s" %}selected{% endif %}>{{ marca.nombre }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    <span>Tipo de producto</span>
+    <select name="tipo">
+      <option value="">Todos los tipos</option>
+      {% for tipo in tipos %}
+        <option value="{{ tipo.id }}" {% if tipo_seleccionado == tipo.id|stringformat:"s" %}selected{% endif %}>{{ tipo.nombre }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button class="button primary" type="submit">Aplicar filtros</button>
+  {% if marca_seleccionada or tipo_seleccionado %}
+    <a class="button ghost" href="{% url 'negocio:productos' %}">Limpiar</a>
+  {% endif %}
+</form>
+
+{% if productos %}
+  <section class="product-grid">
+    {% for producto in productos %}
+      <article class="product-card">
+        <div class="product-image">
+          {% if producto.foto %}
+            <img src="{{ producto.foto.url }}" alt="{{ producto.nombre }}">
+          {% else %}
+            <span>{{ producto.nombre|first|upper }}</span>
+          {% endif %}
+        </div>
+        <div class="product-content">
+          <div class="tags">
+            <span>{{ producto.marca|default:"Sin marca" }}</span>
+            <span>{{ producto.tipo_producto|default:"Sin tipo" }}</span>
+          </div>
+          <h2>{{ producto.nombre }}</h2>
+          <div class="card-footer">
+            <p><strong>{{ producto.stock }}</strong> unidades disponibles</p>
+            <div class="product-actions">
+              {% if producto.link %}
+                <a href="{{ producto.link }}" target="_blank" rel="noopener">Ver ↗</a>
+              {% endif %}
+              <a class="danger-link" href="{% url 'negocio:producto_eliminar' producto.id %}">Eliminar</a>
+            </div>
+          </div>
+        </div>
+      </article>
+    {% endfor %}
+  </section>
+{% else %}
+  <section class="empty-state">
+    <h2>No hay productos con esos filtros</h2>
+    <p>Prueba otra combinación de marca y tipo.</p>
+    <a class="button primary" href="{% url 'negocio:productos' %}">Ver todos</a>
+  </section>
+{% endif %}
+{% endblock %}

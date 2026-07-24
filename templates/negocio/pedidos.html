@@ -1,0 +1,43 @@
+{% extends "negocio/base.html" %}
+{% block title %}Pedidos{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Compras e importación</p>
+    <h1>Pedidos</h1>
+    <p class="subtitle">Revisa el avance de cada pedido y entra al detalle cuando lo necesites.</p>
+  </div>
+  <div class="heading-actions">
+    <span class="count-pill">{{ pedidos|length }} pedido{{ pedidos|length|pluralize }}</span>
+    <a class="button primary" href="{% url 'negocio:pedido_crear' %}">+ Nuevo pedido</a>
+  </div>
+</section>
+
+{% if pedidos %}
+  <section class="order-list">
+    {% for pedido in pedidos %}
+      <a class="order-card" href="{% url 'negocio:pedido_detalle' pedido.id %}">
+        <div class="order-icon">#{{ pedido.id }}</div>
+        <div class="order-main">
+          <div class="order-title">
+            <h2>{{ pedido.propietario|default:"Pedido sin propietario" }}</h2>
+            <span>{{ pedido.fecha|date:"d M Y" }}</span>
+          </div>
+          <p>{{ pedido.cuenta|default:"Sin cuenta registrada" }} · {{ pedido.direccion|default:"Sin dirección" }}</p>
+          <div class="order-metrics">
+            <span><strong>{{ pedido.total_paquetes }}</strong> paquetes</span>
+            <span><strong>{{ pedido.total_unidades }}</strong> unidades</span>
+            <span><strong>{{ pedido.paquetes_entregados }}/{{ pedido.total_paquetes }}</strong> entregados</span>
+          </div>
+        </div>
+        <span class="chevron" aria-hidden="true">›</span>
+      </a>
+    {% endfor %}
+  </section>
+{% else %}
+  <section class="empty-state">
+    <h2>Aún no hay pedidos</h2>
+    <p>Cuando registres el primero aparecerá aquí.</p>
+  </section>
+{% endif %}
+{% endblock %}
